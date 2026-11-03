@@ -30,7 +30,7 @@ function Agent({ dao, p, onClose }) {
   useEffect(() => { let on = true, since = 0;
     const tick = async () => { try { const r = await (await fetch(`/api/agent?dao=${dao.id}&pid=${p.id}&since=${since}`)).json();
       if (r.length && on) { since = r[r.length - 1].t; setEv(e => (r.some(x => x.reset) ? r : [...e, ...r])); } } catch {} };
-    tick(); const t = setInterval(tick, 1200); return () => { on = false; clearInterval(t); }; }, [dao.id, p.id]);
+    tick(); const t = setInterval(tick, 2000); return () => { on = false; clearInterval(t); }; }, [dao.id, p.id]);
   const box = useRef(null);
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [ev.length]);
   const last = [...ev].reverse().find(e => e.shot); const done = ev.find(e => e.phase === "done");

@@ -1,0 +1,4 @@
+.charity-keys
+.env*
+node_modules
+.next
