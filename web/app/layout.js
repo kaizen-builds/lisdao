@@ -1,4 +1,5 @@
 import "@near-wallet-selector/modal-ui/styles.css";
 import "./globals.css";
-export const metadata = { title: "LisDAO" };
-export default function L({ children }) { return <html><body>{children}</body></html>; }
+export const metadata = { title: "LisDao — DAOs with AI agents on NEAR" };
+export const viewport = { width: "device-width", initialScale: 1, themeColor: "#FF7A1B" };
+export default function L({ children }) { return <html lang="en"><body>{children}</body></html>; }

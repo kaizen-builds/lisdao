@@ -1,4 +1,4 @@
-# LisDAO — DAOs with AI agents that act in the real world (NEAR)
+# LisDao — DAOs with AI agents that act in the real world (NEAR)
 
 Built at NEAR HACKATHON (Nov 2026). Communities create a DAO, give members weighted voting power, vote on plain-English proposals, and an authorized AI agent executes approved tasks off-chain (purchases, donations, messages) and writes a verified report back on-chain. Only the DAO's designated agent account can report results, so the outcome trail is auditable on NEAR.
 

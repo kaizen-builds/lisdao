@@ -4,6 +4,7 @@ import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupModal } from "@near-wallet-selector/modal-ui";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
+import { Drop, Wordmark } from "./Logo";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-1793738031.testnet";
 const RPC = "https://rpc.testnet.near.org";
@@ -43,6 +44,7 @@ export default function Home() {
   const [daos, setDaos] = useState([]); const [cur, setCur] = useState(null); const [props, setProps] = useState([]);
   const [votes, setVotes] = useState([]); const [pane, setPane] = useState("summary"); const [pid, setPid] = useState(null);
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
+  const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState("");
   const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "", desc: "" });
 
   useEffect(() => { (async () => {
@@ -52,13 +54,23 @@ export default function Home() {
       if (q.get("dao")) { const d = +q.get("dao"); await open(d); if (q.get("p")) await showP(d, +q.get("p")); }
       if (q.get("pane")) setPane(q.get("pane")); if (q.get("agent")) setAgent(true);
     } catch (e) { console.error("init", e); }
+    setReady(true);
     const s = await setupWalletSelector({ network: "testnet", modules: [setupMyNearWallet(), setupMeteorWallet()] });
     setSel(s); setModal(setupModal(s, { contractId: CONTRACT }));
     const upd = st => setAcct(st.accounts.find(a => a.active)?.accountId); upd(s.store.getState()); s.store.observable.subscribe(upd);
   })(); }, []);
   async function load() { setDaos(await view("list_daos")); }
-  async function open(id) { setCur(id); setPane("summary"); setProps(await view("get_proposals", { dao_id: id })); }
+  async function open(id) { setCur(id); setPane("summary"); setLoadingP(true); try { setProps(await view("get_proposals", { dao_id: id })); } finally { setLoadingP(false); } }
   async function showP(d, p) { setPid(p); setPane("proposal"); setVotes(await view("get_votes", { dao_id: d, proposal_id: p })); }
+  function flash(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
+  async function vote(d, x, w) {
+    if (!acct) return modal.show();
+    const snap = props;
+    setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + w, status: (q.yes + w) * 100 >= d.total_weight * d.quorum_pct ? "Approved" : q.status } : q));
+    setVotes(v => [...v, [acct, true]]);
+    try { await call("vote", { dao_id: d.id, proposal_id: x.id, approve: true }); flash("Vote recorded on NEAR"); }
+    catch (e) { setProps(snap); flash("Vote failed — reverted"); }
+  }
   async function call(methodName, args) {
     if (!acct) return modal.show();
     setBusy(true);
@@ -69,19 +81,20 @@ export default function Home() {
   }
   const dao = daos.find(d => d.id === cur); const p = props.find(x => x.id === pid);
 
-  const nav = <div className="nav"><div className="net">● NEAR Testnet</div>
+  const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>
     <div style={{ position: "relative" }}>{acct
       ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
       : <button className="btn" onClick={() => modal?.show()}>👛 Connect wallet</button>}
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
         <button className="btn sm" onClick={async () => { (await sel.wallet()).signOut(); setMenu(false); }}>Sign out</button></div>}</div></div>;
 
-  if (cur === null && pane !== "create-dao") return <>{nav}<div className="center">
-    <div className="logo">✦</div><h1 className="brand">LisDAO</h1><div className="muted">Select a DAO to continue:</div>
+  if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
+    <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><div className="muted">Select a DAO to continue:</div>
+    {!ready && [0, 1].map(i => <div key={i} className="sk big" />)}
     {daos.map(d => <button key={d.id} className="btn full" onClick={() => open(d.id)}>{d.name}</button>)}
     <button className="btn p full" onClick={() => setPane("create-dao")}>Create New DAO</button></div></>;
 
-  if (pane === "create-dao") return <>{nav}<div className="center" style={{ textAlign: "left" }}><div className="panel">
+  if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
     <label>DAO Name</label><input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} />
     <label>Members (account:votes)</label><input placeholder="alice.testnet:3, bob.testnet:1" value={f.members} onChange={e => setF({ ...f, members: e.target.value })} />
@@ -90,21 +103,23 @@ export default function Home() {
       members: f.members.split(",").map(s => s.trim()).filter(Boolean).map(s => { const [a, w] = s.split(":"); return [a, +(w || 1)]; }) }); setPane("summary"); }}>{busy ? "Creating..." : "Create DAO"}</button>
     <button className="btn full" style={{ marginTop: 8 }} onClick={() => setPane("summary")}>Back</button></div></div></>;
 
-  if (!dao) return nav;
+  if (!dao) return <>{nav}<div className="grid"><div className="panel">{[0, 1, 2].map(i => <div key={i} className="sk big" />)}</div>
+    <div className="panel">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="sk" />)}</div></div></>;
   const used = votes.length ? votes.reduce((s, [a]) => s + (dao.members.find(m => m[0] === a)?.[1] || 0), 0) : 0;
   const myW = dao.members.find(m => m[0] === acct)?.[1] || 0;
   const pct = p ? Math.round(100 * p.yes / dao.total_weight) : 0;
 
-  return <>{nav}{agent && p && <Agent p={p} onClose={() => setAgent(false)} />}
+  return <>{nav}{toast && <div className="toast">{toast}</div>}{agent && p && <Agent p={p} onClose={() => setAgent(false)} />}
     <div className="grid">
       <div className="panel">
         <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><button className="btn sm" onClick={() => { setCur(null); setPane("summary"); }}>Switch</button></div>
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
-        <div className="card" onClick={() => setPane("summary")} style={{ background: "#F9FAFB" }}>Summary</div>
+        <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>Summary</div>
+        {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
         {props.slice().reverse().map(x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
           <div className="row"><span>{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div></div>)}
       </div>
-      <div className="panel">
+      <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
           <h2>Summary</h2>
           {[["Name", dao.name], ["Created At", "DAO #" + dao.id + " on NEAR testnet"], ["Creator Account", dao.owner], ["DAO Account", CONTRACT + " #" + dao.id], ["Balance in NEAR", yocto(dao.treasury)], ["Agent", dao.agent], ["Quorum", dao.quorum_pct + "%"]]
@@ -123,13 +138,13 @@ export default function Home() {
         {pane === "proposal" && p && <>
           <h1 style={{ marginTop: 0 }}>{p.title}</h1>
           <p className="muted">{p.action.AgentTask?.instructions || `Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
-          <div className="panel" style={{ background: "#F9FAFB", boxShadow: "none", border: "1px solid #E5E7EB" }}>
+          <div className="panel" style={{ background: "#FFFBF7", boxShadow: "none", border: "1px solid var(--line)" }}>
             {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing" : p.status === "Executed" ? "Passed · Executed" : p.status],
               ["Created", fmt(BigInt(p.deadline_ns) - BigInt(dao.voting_period_ns))], ["Voting Ends", fmt(p.deadline_ns)], ["Created by", p.proposer]]
               .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
           </div>
           <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {dao.total_weight} votes</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
-          {p.status === "Active" && <button className="btn p full" disabled={busy} onClick={() => call("vote", { dao_id: dao.id, proposal_id: p.id, approve: true })}>{busy ? "Voting..." : "Vote Yes"}</button>}
+          {p.status === "Active" && <button className="btn p full" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{busy ? "Voting..." : "Vote Yes"}</button>}
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={async () => { await call("execute", { dao_id: dao.id, proposal_id: p.id }); setAgent(true); }}>{busy ? "Sending..." : "Send to Agent"}</button>}
           {(p.status === "Executing" || p.status === "Executed" || p.status === "Failed") && <button className="btn p full" onClick={() => setAgent(true)}>View Agent Execution</button>}
           {p.result && <div className="receipt" style={{ marginTop: 14 }}><b>Agent report (on-chain):</b> {p.result}</div>}
