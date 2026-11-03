@@ -1,4 +1,3 @@
-import "@near-wallet-selector/modal-ui/styles.css";
 import "./globals.css";
 export const metadata = { title: "LisDao — DAOs with AI agents on NEAR" };
 export const viewport = { width: "device-width", initialScale: 1, themeColor: "#FF7A1B" };

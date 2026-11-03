@@ -43,7 +43,7 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
 ## Architecture
 
 ```
-  web (Next.js, Wallet Selector) ── propose / vote ──►  LisDao contract (NEAR testnet)
+  web (Next.js, NEAR Connector) ── propose / vote ──►  LisDao contract (NEAR testnet)
         ▲  polls proposals + agent feed                    │  vote passes → status Executing
         │                                                  ▼
   /api/agent (Vercel Blob)  ◄── step events ──  agent (box) ── pending_tasks / report_payout
@@ -85,7 +85,7 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
 
 ## Libraries
 
-near-sdk, near-api-js, @near-wallet-selector, Next.js/React, @vercel/blob, qrcode, Playwright, tesseract.js. Built with help from AI coding tools.
+near-sdk, near-api-js, @hot-labs/near-connect (NEAR Connector), Next.js/React, @vercel/blob, qrcode, Playwright, tesseract.js. Built with help from AI coding tools.
 
 ## License
 

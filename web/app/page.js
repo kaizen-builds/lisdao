@@ -1,9 +1,5 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { setupWalletSelector } from "@near-wallet-selector/core";
-import { setupModal } from "@near-wallet-selector/modal-ui";
-import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
-import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { Drop, Wordmark } from "./Logo";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
@@ -66,9 +62,12 @@ export default function Home() {
       if (q.get("pane")) setPane(q.get("pane")); if (q.get("agent")) setAgent(true);
     } catch (e) { console.error("init", e); }
     setReady(true);
-    const s = await setupWalletSelector({ network: "testnet", modules: [setupMyNearWallet(), setupMeteorWallet()] });
-    setSel(s); setModal(setupModal(s, { contractId: CONTRACT }));
-    const upd = st => setAcct(st.accounts.find(a => a.active)?.accountId); upd(s.store.getState()); s.store.observable.subscribe(upd);
+    const { NearConnector } = await import("@hot-labs/near-connect");
+    const nc = new NearConnector({ network: "testnet", autoConnect: true, features: { testnet: true } });
+    nc.on("wallet:signIn", t => setAcct(t.accounts?.[0]?.accountId));
+    nc.on("wallet:signOut", () => setAcct(undefined));
+    setSel(nc); setModal({ show: () => nc.connect().catch(e => console.warn("connect", e)) });
+    nc.getConnectedWallet().then(({ accounts }) => setAcct(accounts?.[0]?.accountId)).catch(() => {});
   })(); }, []);
   useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
     try { const [ps, ds] = await Promise.all([view("get_proposals", { dao_id: cur }), view("list_daos")]); setProps(ps); setDaos(ds); } catch {} }, 3000);
@@ -86,11 +85,11 @@ export default function Home() {
     try { await call("vote", { dao_id: d.id, proposal_id: x.id, approve: true }); flash("Vote recorded on NEAR"); }
     catch (e) { setProps(snap); flash("Vote failed — reverted"); }
   }
-  async function call(methodName, args) {
+  async function call(methodName, args, deposit) {
     if (!acct) return modal.show();
     setBusy(true);
     try { const w = await sel.wallet();
-      await w.signAndSendTransaction({ receiverId: CONTRACT, actions: [{ type: "FunctionCall", params: { methodName, args, gas: "100000000000000", deposit: "0" } }] });
+      await w.signAndSendTransaction({ receiverId: CONTRACT, actions: [{ type: "FunctionCall", params: { methodName, args, gas: "100000000000000", deposit: deposit || "0" } }] });
       await load(); if (cur !== null) { setProps(await view("get_proposals", { dao_id: cur })); if (pid !== null) setVotes(await view("get_votes", { dao_id: cur, proposal_id: pid })); }
     } finally { setBusy(false); }
   }
@@ -101,7 +100,7 @@ export default function Home() {
       ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
       : <button className="btn" onClick={() => modal?.show()}>👛 Connect wallet</button>}
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
-        <button className="btn sm" onClick={async () => { (await sel.wallet()).signOut(); setMenu(false); }}>Sign out</button></div>}</div></div>;
+        <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
 
   if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
     <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><div className="muted">Select a DAO to continue:</div>
