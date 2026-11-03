@@ -1,0 +1,3 @@
+CONTRACT_ID=lisdao-v2-1793741346.testnet
+AGENT_ID=lisdao-agent-1793741346.testnet
+VOTER_ID=lisdao-voter-1793741346.testnet

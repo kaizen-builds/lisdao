@@ -37,3 +37,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 3
 @media (max-width:760px){.grid{grid-template-columns:1fr;padding:10px;gap:10px}.panel{padding:16px}.kv{flex-direction:column;gap:2px}.kv b{width:auto}
  .agent{left:8px;right:8px;width:auto;top:60px}.nav{padding:8px 12px}.net{display:none}h1{font-size:24px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.shot{width:100%;border-radius:6px;border:1px solid var(--line);margin-bottom:10px;display:block}
+.agent{width:340px}
+@media (max-width:760px){.agent{width:auto}}
+.shot{max-height:46vh;object-fit:contain;object-position:top;background:#F2F7FB;position:sticky;top:0;z-index:1}

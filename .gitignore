@@ -6,3 +6,8 @@ target
 *.pem
 *.key
 *credentials*.json
+.charity-keys
+demo/*.webm
+demo/ui
+demo/agent
+demo/*.mp4

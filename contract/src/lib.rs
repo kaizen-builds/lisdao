@@ -18,7 +18,7 @@ pub enum Action {
     /// On-chain NEAR transfer from DAO treasury, executed by the contract.
     Transfer { receiver_id: AccountId, amount: NearToken },
     /// Real-world task in plain English, executed off-chain by the agent.
-    AgentTask { instructions: String, max_spend_usd: u32 },
+    AgentTask { instructions: String, max_spend: NearToken },
 }
 
 #[near(serializers = [json, borsh])]
@@ -123,7 +123,13 @@ impl LisDao {
         require!(p.status == Status::Active, "not active");
         require!(env::block_timestamp() <= p.deadline_ns, "voting closed");
         if approve { p.yes += w } else { p.no += w }
-        if p.yes * 100 >= total * q { p.status = Status::Approved; }
+        if p.yes * 100 >= total * q {
+            // Agent tasks are dispatched to the agent the moment they pass.
+            if matches!(p.action, Action::AgentTask { .. }) {
+                p.status = Status::Executing;
+                env::log_str(&format!("EVENT agent_task {dao_id} {proposal_id}"));
+            } else { p.status = Status::Approved; }
+        }
         else if p.no * 100 > total * (100 - q) { p.status = Status::Rejected; }
         p.status.clone()
     }
@@ -160,6 +166,27 @@ impl LisDao {
         p.result = Some(report);
     }
 
+    /// Agent reports the payout address it extracted (e.g. a charity's one-time
+    /// deposit address). The contract itself pays from the treasury, capped by
+    /// the proposal's max_spend. Only the DAO's agent may call this.
+    pub fn report_payout(&mut self, dao_id: u32, proposal_id: u32, receiver_id: AccountId,
+                         amount: NearToken, report: String) -> Promise {
+        let caller = env::predecessor_account_id();
+        let dao = self.dao_mut(dao_id);
+        require!(caller == dao.agent, "only agent");
+        let p = dao.proposals.get_mut(proposal_id).expect("no proposal");
+        require!(p.status == Status::Executing, "not executing");
+        let cap = match &p.action { Action::AgentTask { max_spend, .. } => *max_spend, _ => env::panic_str("not agent task") };
+        require!(amount.as_yoctonear() > 0 && amount <= cap, "over spending cap");
+        require!(dao.treasury >= amount, "insufficient treasury");
+        require!(report.len() <= 1000, "report too long");
+        dao.treasury = dao.treasury.saturating_sub(amount);
+        p.status = Status::Executed;
+        p.result = Some(format!("paid {} to {} | {}", amount.exact_amount_display(), receiver_id, report));
+        env::log_str(&format!("EVENT payout {dao_id} {proposal_id} {receiver_id} {}", amount.as_yoctonear()));
+        Promise::new(receiver_id).transfer(amount)
+    }
+
     // ---- views ----
     pub fn get_dao(&self, dao_id: u32) -> DaoView { self.view(dao_id) }
     pub fn list_daos(&self) -> Vec<DaoView> { (0..self.daos.len()).map(|i| self.view(i)).collect() }
@@ -191,6 +218,47 @@ impl LisDao {
 
 #[cfg(test)]
 mod tests {
+    fn fund(c: &mut LisDao, id: u32, n: u128) {
+        testing_env!(VMContextBuilder::new().predecessor_account_id(accounts(0)).attached_deposit(NearToken::from_near(n)).build());
+        c.deposit(id);
+    }
+    #[test]
+    fn payout_within_cap() {
+        ctx(0);
+        let mut c = LisDao::new();
+        let id = c.create_dao("W".into(), accounts(3), 51, 60, vec![]);
+        fund(&mut c, id, 1);
+        ctx(0);
+        let pid = c.propose(id, "Donate".into(), Action::AgentTask { instructions: "Donate 0.1 NEAR".into(), max_spend: NearToken::from_millinear(100) });
+        assert_eq!(c.vote(id, pid, true), Status::Executing);
+        ctx(3);
+        let _ = c.report_payout(id, pid, "charity.testnet".parse().unwrap(), NearToken::from_millinear(100), "addr from page".into());
+        assert_eq!(c.get_proposals(id)[0].status, Status::Executed);
+        assert_eq!(c.get_dao(id).treasury, NearToken::from_millinear(900));
+    }
+    #[test]
+    #[should_panic(expected = "over spending cap")]
+    fn payout_over_cap() {
+        ctx(0);
+        let mut c = LisDao::new();
+        let id = c.create_dao("W".into(), accounts(3), 51, 60, vec![]);
+        fund(&mut c, id, 1); ctx(0);
+        let pid = c.propose(id, "D".into(), Action::AgentTask { instructions: "x".into(), max_spend: NearToken::from_millinear(100) });
+        c.vote(id, pid, true); ctx(3);
+        let _ = c.report_payout(id, pid, "charity.testnet".parse().unwrap(), NearToken::from_millinear(200), "x".into());
+    }
+    #[test]
+    #[should_panic(expected = "only agent")]
+    fn payout_only_agent() {
+        ctx(0);
+        let mut c = LisDao::new();
+        let id = c.create_dao("W".into(), accounts(3), 51, 60, vec![]);
+        fund(&mut c, id, 1); ctx(0);
+        let pid = c.propose(id, "D".into(), Action::AgentTask { instructions: "x".into(), max_spend: NearToken::from_millinear(100) });
+        c.vote(id, pid, true); ctx(1);
+        let _ = c.report_payout(id, pid, accounts(1), NearToken::from_millinear(100), "x".into());
+    }
+
     use super::*;
     use near_sdk::test_utils::{accounts, VMContextBuilder};
     use near_sdk::testing_env;
@@ -203,9 +271,8 @@ mod tests {
         let id = c.create_dao("Lis".into(), accounts(3), 51, 60, vec![(accounts(1), 3), (accounts(2), 1)]);
         assert_eq!(c.get_dao(id).total_weight, 5);
         ctx(1);
-        let pid = c.propose(id, "Donate".into(), Action::AgentTask { instructions: "Donate $20 to Red Cross".into(), max_spend_usd: 20 });
-        assert_eq!(c.vote(id, pid, true), Status::Approved); // 3/5 = 60% >= 51
-        assert_eq!(c.execute(id, pid), Status::Executing);
+        let pid = c.propose(id, "Donate".into(), Action::AgentTask { instructions: "Donate $20 to Red Cross".into(), max_spend: NearToken::from_millinear(100) });
+        assert_eq!(c.vote(id, pid, true), Status::Executing); // 3/5 = 60% >= 51 -> auto-dispatch
         assert_eq!(c.pending_tasks(accounts(3)).len(), 1);
         ctx(3);
         c.report_result(id, pid, true, "receipt #123".into());
@@ -218,8 +285,8 @@ mod tests {
         ctx(0);
         let mut c = LisDao::new();
         let id = c.create_dao("Lis".into(), accounts(3), 51, 60, vec![]);
-        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend_usd: 1 });
-        c.vote(id, pid, true); c.execute(id, pid);
+        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend: NearToken::from_millinear(100) });
+        c.vote(id, pid, true);
         ctx(1); c.report_result(id, pid, true, "fake".into());
     }
 
@@ -229,7 +296,7 @@ mod tests {
         ctx(0);
         let mut c = LisDao::new();
         let id = c.create_dao("Lis".into(), accounts(3), 90, 60, vec![(accounts(1), 1)]);
-        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend_usd: 1 });
+        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend: NearToken::from_millinear(100) });
         c.vote(id, pid, true); c.vote(id, pid, true);
     }
 
@@ -238,7 +305,7 @@ mod tests {
         ctx(0);
         let mut c = LisDao::new();
         let id = c.create_dao("Lis".into(), accounts(3), 51, 60, vec![(accounts(1), 9)]);
-        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend_usd: 1 });
+        let pid = c.propose(id, "x".into(), Action::AgentTask { instructions: "x".into(), max_spend: NearToken::from_millinear(100) });
         ctx(1); assert_eq!(c.vote(id, pid, false), Status::Rejected);
     }
 }

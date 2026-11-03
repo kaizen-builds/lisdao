@@ -1,19 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { setupWalletSelector } from "@near-wallet-selector/core";
 import { setupModal } from "@near-wallet-selector/modal-ui";
 import { setupMyNearWallet } from "@near-wallet-selector/my-near-wallet";
 import { setupMeteorWallet } from "@near-wallet-selector/meteor-wallet";
 import { Drop, Wordmark } from "./Logo";
 
-const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-1793738031.testnet";
+const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
 const RPC = "https://rpc.testnet.near.org";
 async function view(method, args = {}) {
   for (let i = 0; ; i++) { try { return await view1(method, args); } catch (e) { if (i > 2) throw e; await new Promise(r => setTimeout(r, 800)); } }
 }
 async function view1(method, args) {
   const r = await fetch(RPC, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-    jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "call_function", finality: "final",
+    jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "call_function", finality: "optimistic",
       account_id: CONTRACT, method_name: method, args_base64: btoa(JSON.stringify(args)) } }) });
   const j = await r.json(); if (j.error || j.result?.error) throw new Error(JSON.stringify(j.error || j.result.error));
   return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
@@ -23,18 +23,29 @@ const badge = s => ({ Active: "Voting", Approved: "Passed", Executing: "Passed",
 const yocto = y => (Number(BigInt(y) / 10n ** 20n) / 1e4).toFixed(4);
 const fmt = ns => new Date(Number(BigInt(ns) / 1000000n)).toLocaleString();
 
-function Agent({ p, onClose }) {
-  const task = p.action.AgentTask?.instructions || p.title;
-  const steps = ["Reading approved proposal from NEAR", `Planning: "${task}"`, "Opening browser", "Filling checkout form", "Confirming payment", "Capturing receipt (OCR)", "Reporting result on-chain"];
-  const [n, setN] = useState(0);
-  useEffect(() => { const t = setInterval(() => setN(x => Math.min(x + 1, steps.length)), 900); return () => clearInterval(t); }, []);
-  const done = n >= steps.length;
-  return <div className="agent"><div className="chrome"><span /><span /><span /> lisdao-agent · browser</div>
-    <div className="screen">
-      {steps.slice(0, n).map((s, i) => <div className="step" key={i}>✓ {s}</div>)}
-      {!done && <div style={{ position: "relative", height: 60 }}><div className="ripple" style={{ left: 120, top: 20 }} /><div className="ripple b" style={{ left: 120, top: 20 }} /></div>}
-      {done && <div className="receipt"><b>Reported on-chain</b><div style={{ marginTop: 6 }}>{p.result || "Waiting for agent report…"}</div>
-        <div style={{ marginTop: 6, fontSize: 12 }}>Status: {p.status}</div></div>}
+function toYocto(n) { const [i, f = ""] = String(n).split("."); return (BigInt(i || 0) * 10n ** 24n + BigInt((f + "0".repeat(24)).slice(0, 24))).toString(); }
+
+function Agent({ dao, p, onClose }) {
+  const [ev, setEv] = useState([]);
+  useEffect(() => { let on = true, since = 0;
+    const tick = async () => { try { const r = await (await fetch(`/api/agent?dao=${dao.id}&pid=${p.id}&since=${since}`)).json();
+      if (r.length && on) { since = r[r.length - 1].t; setEv(e => (r.some(x => x.reset) ? r : [...e, ...r])); } } catch {} };
+    tick(); const t = setInterval(tick, 1200); return () => { on = false; clearInterval(t); }; }, [dao.id, p.id]);
+  const box = useRef(null);
+  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [ev.length]);
+  const last = [...ev].reverse().find(e => e.shot); const done = ev.find(e => e.phase === "done");
+  const failed = ev.find(e => e.phase === "failed");
+  return <div className="agent"><div className="chrome"><span /><span /><span /> LisDao agent · live browser</div>
+    <div className="screen" ref={box}>
+      {last ? <img key={last.t} src={"data:image/jpeg;base64," + last.shot} alt="agent browser" className="shot fade" />
+        : !done && <div className="sk" style={{ height: 220 }} />}
+      {ev.length === 0 && p.status === "Executing" && <div className="step">Waiting for the agent to pick up the task…</div>}
+      {ev.map((e, i) => <div className="step" key={e.t + "" + i}>{e.phase === "done" ? "✅" : e.phase === "failed" ? "⚠️" : "✓"} {e.text}</div>)}
+      {!done && !failed && p.status === "Executing" && <div style={{ position: "relative", height: 40 }}><div className="ripple" style={{ left: 130, top: 10 }} /><div className="ripple b" style={{ left: 130, top: 10 }} /></div>}
+      {(done || p.status === "Executed") && <div className="receipt"><b>Reported on-chain · paid by the DAO contract</b>
+        {done?.address && <div style={{ marginTop: 6, overflowWrap: "anywhere" }}>To: {done.address}</div>}
+        {done?.tx && <div style={{ marginTop: 6 }}><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank">View transaction ↗</a></div>}
+        {p.result && <div style={{ marginTop: 6, fontSize: 12 }}>{p.result}</div>}</div>}
     </div>
     <div style={{ padding: 10 }}><button className="btn full" onClick={onClose}>Close</button></div></div>;
 }
@@ -59,6 +70,10 @@ export default function Home() {
     setSel(s); setModal(setupModal(s, { contractId: CONTRACT }));
     const upd = st => setAcct(st.accounts.find(a => a.active)?.accountId); upd(s.store.getState()); s.store.observable.subscribe(upd);
   })(); }, []);
+  useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
+    try { const [ps, ds] = await Promise.all([view("get_proposals", { dao_id: cur }), view("list_daos")]); setProps(ps); setDaos(ds); } catch {} }, 3000);
+    return () => clearInterval(t); }, [cur]);
+  useEffect(() => { const x = props.find(q => q.id === pid); if (x && x.status === "Executing" && pane === "proposal") setAgent(true); }, [props, pid, pane]);
   async function load() { setDaos(await view("list_daos")); }
   async function open(id) { setCur(id); setPane("summary"); setLoadingP(true); try { setProps(await view("get_proposals", { dao_id: id })); } finally { setLoadingP(false); } }
   async function showP(d, p) { setPid(p); setPane("proposal"); setVotes(await view("get_votes", { dao_id: d, proposal_id: p })); }
@@ -66,7 +81,7 @@ export default function Home() {
   async function vote(d, x, w) {
     if (!acct) return modal.show();
     const snap = props;
-    setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + w, status: (q.yes + w) * 100 >= d.total_weight * d.quorum_pct ? "Approved" : q.status } : q));
+    setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + w, status: (q.yes + w) * 100 >= d.total_weight * d.quorum_pct ? (q.action.AgentTask ? "Executing" : "Approved") : q.status } : q));
     setVotes(v => [...v, [acct, true]]);
     try { await call("vote", { dao_id: d.id, proposal_id: x.id, approve: true }); flash("Vote recorded on NEAR"); }
     catch (e) { setProps(snap); flash("Vote failed — reverted"); }
@@ -90,8 +105,8 @@ export default function Home() {
 
   if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
     <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><div className="muted">Select a DAO to continue:</div>
-    {!ready && [0, 1].map(i => <div key={i} className="sk big" />)}
-    {daos.map(d => <button key={d.id} className="btn full" onClick={() => open(d.id)}>{d.name}</button>)}
+    {!ready && <div className="sk big" />}
+    {ready && daos[0] && <button className="btn full" onClick={() => open(0)}>Demo DAO</button>}
     <button className="btn p full" onClick={() => setPane("create-dao")}>Create New DAO</button></div></>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
@@ -109,10 +124,11 @@ export default function Home() {
   const myW = dao.members.find(m => m[0] === acct)?.[1] || 0;
   const pct = p ? Math.round(100 * p.yes / dao.total_weight) : 0;
 
-  return <>{nav}{toast && <div className="toast">{toast}</div>}{agent && p && <Agent p={p} onClose={() => setAgent(false)} />}
+  return <>{nav}{toast && <div className="toast">{toast}</div>}{agent && p && <Agent dao={dao} p={p} onClose={() => setAgent(false)} />}
     <div className="grid">
       <div className="panel">
-        <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><button className="btn sm" onClick={() => { setCur(null); setPane("summary"); }}>Switch</button></div>
+        <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(+e.target.value)} aria-label="Switch DAO">
+          {daos.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}<option value="home">← Home</option></select></div>
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
         <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>Summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
@@ -132,20 +148,20 @@ export default function Home() {
           </tbody></table></>}
         {pane === "create" && <>
           <h2>Create Proposal</h2>
-          <label>Proposal Title</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
-          <label>Proposal Description</label><textarea rows={5} placeholder="donate 0.1 NEAR to the water project" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
-          <button className="btn p" disabled={busy} onClick={async () => { await call("propose", { dao_id: dao.id, title: f.title, action: { AgentTask: { instructions: f.desc, max_spend_usd: 50 } } }); setPane("summary"); }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
+          <label>Proposal Title</label><input placeholder="Donate to the water project" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+          <label>Proposal Description</label><textarea rows={5} placeholder="Donate 0.1 NEAR to the water project" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
+          <button className="btn p" disabled={busy} onClick={async () => { await call("propose", { dao_id: dao.id, title: f.title, action: { AgentTask: { instructions: f.desc, max_spend: toYocto((f.desc.match(/([\d.]+)\s*NEAR/i) || [0, "0.1"])[1]) } } }); setPane("summary"); }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
         {pane === "proposal" && p && <>
           <h1 style={{ marginTop: 0 }}>{p.title}</h1>
-          <p className="muted">{p.action.AgentTask?.instructions || `Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
+          <p className="muted">{p.action.AgentTask ? `${p.action.AgentTask.instructions} · cap ${yocto(p.action.AgentTask.max_spend)} NEAR` : `Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
           <div className="panel" style={{ background: "#FFFBF7", boxShadow: "none", border: "1px solid var(--line)" }}>
-            {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing" : p.status === "Executed" ? "Passed · Executed" : p.status],
+            {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing in browser" : p.status === "Executed" ? "Passed · Executed" : p.status],
               ["Created", fmt(BigInt(p.deadline_ns) - BigInt(dao.voting_period_ns))], ["Voting Ends", fmt(p.deadline_ns)], ["Created by", p.proposer]]
               .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
           </div>
           <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {dao.total_weight} votes</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
           {p.status === "Active" && <button className="btn p full" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{busy ? "Voting..." : "Vote Yes"}</button>}
-          {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={async () => { await call("execute", { dao_id: dao.id, proposal_id: p.id }); setAgent(true); }}>{busy ? "Sending..." : "Send to Agent"}</button>}
+          {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
           {(p.status === "Executing" || p.status === "Executed" || p.status === "Failed") && <button className="btn p full" onClick={() => setAgent(true)}>View Agent Execution</button>}
           {p.result && <div className="receipt" style={{ marginTop: 14 }}><b>Agent report (on-chain):</b> {p.result}</div>}
         </>}
