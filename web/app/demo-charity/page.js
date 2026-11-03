@@ -7,8 +7,9 @@ const S = { page: { minHeight: "100vh", background: "#F2F7FB", fontFamily: "syst
   btn: { width: "100%", padding: 14, background: "#F5A623", border: "none", borderRadius: 6, fontSize: 16, fontWeight: 700, color: "#0B2540", cursor: "pointer" } };
 export default function Charity() {
   const [step, setStep] = useState(1); const [asset, setAsset] = useState("BTC"); const [amount, setAmount] = useState("25");
-  const [addr, setAddr] = useState(null); const [qr, setQr] = useState(null);
+  const [addr, setAddr] = useState(null); const [busy, setBusy] = useState(false); const [qr, setQr] = useState(null);
   async function finish() {
+    setBusy(true);
     const r = await (await fetch("/api/charity", { method: "POST", body: JSON.stringify({ asset, amount }) })).json();
     setAddr(r.address); setQr(await QRCode.toDataURL(r.address, { margin: 1, width: 200 })); setStep(3);
   }
@@ -28,7 +29,7 @@ export default function Charity() {
         <h3>Would you like a tax receipt?</h3>
         <p style={{ fontSize: 13 }}>Optional. Leave blank to donate anonymously.</p>
         <input aria-label="Email for tax receipt (optional)" placeholder="Email (optional)" style={S.in} />
-        <button style={S.btn} onClick={finish}>Next Step</button></>}
+        {busy ? <p><b>Generating your one-time address…</b></p> : <button style={S.btn} onClick={finish}>Next Step</button>}</>}
       {step === 3 && addr && <>
         <h3>Send {amount} {asset}</h3>
         <p>Send exactly <b>{amount} {asset}</b> (NEAR testnet) to this one-time address:</p>

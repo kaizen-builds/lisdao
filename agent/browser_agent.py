@@ -18,10 +18,13 @@ AGENT = E("AGENT_ID", "lisdao-agent-1793741346.testnet")
 WEB = E("WEB_URL", "http://localhost:3000")
 CHARITY = E("CHARITY_URL", WEB + "/demo-charity")
 FEED = E("FEED_URL", WEB + "/api/agent")
-RPC = E("NEAR_RPC", "https://rpc.testnet.near.org")
+RPCS = [E("NEAR_RPC", "https://test.rpc.fastnear.com"), "https://rpc.testnet.near.org"]
 LLM_URL = E("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
 LLM_KEY = E("LLM_API_KEY") or E("NEAR_AI_API_KEY") or E("GEMINI_API_KEY")
-LLM_MODEL = E("LLM_MODEL", "gemini-3-flash-preview")
+LLM_MODEL = E("LLM_MODEL", "gemini-3.1-flash-lite")
+LLM_COOLDOWN = {"until": 0}
+T0 = {"t": 0}
+import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
 ACCOUNT_RE = re.compile(r"\b([0-9a-f]{64}|(?:[a-z0-9_-]+\.)+(?:testnet|near))\b")
 
@@ -30,12 +33,22 @@ def post(url, body, headers={}, timeout=60):
     return json.loads(urllib.request.urlopen(req, timeout=timeout).read() or b"null")
 
 def view(method, args):
+    for i, rpc in enumerate(RPCS):
+        try: return _view(rpc, method, args)
+        except Exception:
+            if i == len(RPCS) - 1: raise
+
+def _view(RPC, method, args):
     r = post(RPC, {"jsonrpc": "2.0", "id": 1, "method": "query", "params": {"request_type": "call_function", "finality": "optimistic",
         "account_id": CONTRACT, "method_name": method, "args_base64": base64.b64encode(json.dumps(args).encode()).decode()}})
     return json.loads(bytes(r["result"]["result"]))
 
 def feed(dao, pid, text, shot=None, **kw):
-    print(f"[{dao}/{pid}] {text}", flush=True)
+    el = time.time() - T0["t"] if T0["t"] else 0
+    print(f"[{dao}/{pid}] +{el:5.1f}s {text}", flush=True)
+    threading.Thread(target=_feed, args=(dao, pid, text, shot, kw), daemon=True).start()
+
+def _feed(dao, pid, text, shot, kw):
     try: post(FEED, {"dao_id": dao, "proposal_id": pid, "text": text, "shot": shot, **kw}, {"x-agent-token": E("AGENT_FEED_TOKEN", "")}, 10)
     except Exception as e: print("  feed error:", e)
 
@@ -66,25 +79,26 @@ HIGHLIGHT_JS = """([id, x, y]) => { const el = document.querySelector(`[data-lis
     document.body.appendChild(c); } }"""
 
 def shot(page):
-    return base64.b64encode(page.screenshot(type="jpeg", quality=55)).decode()
+    return base64.b64encode(page.screenshot(type="jpeg", quality=45)).decode()
 
 def llm(goal, history, img, elements):
     prompt = f"""You control a web browser for a DAO. Goal: {goal}
 You see the CURRENT screenshot. First verify whether the previous action worked (compare with history), then choose ONE next action.
 Interactive elements (id, tag, label, value, options): {json.dumps(elements)}
-History: {json.dumps(history[-6:])}
+History: {json.dumps(history[-4:])}
 Rules: if a textbox already has a default value (e.g. 25) you must use "type" which clears it first. Choose the cryptocurrency in dropdowns with "select".
 Skip optional tax receipt pages by clicking Next Step. When the one-time deposit address is visible, use "extract" and copy the address exactly.
 Reply ONLY JSON: {{"verify":"ok|off_track|start","thought":"...","action":"click|type|select|extract|fail","id":<element id>,"value":"<text or option value>","address":"<only for extract>"}}"""
-    body = {"model": LLM_MODEL, "temperature": 0, "response_format": {"type": "json_object"}, "messages": [{"role": "user", "content": [
+    if time.time() < LLM_COOLDOWN["until"]: return None
+    body = {"model": LLM_MODEL, "temperature": 0, "reasoning_effort": "low", "response_format": {"type": "json_object"}, "messages": [{"role": "user", "content": [
         {"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]}]}
-    for attempt in range(3):
-        try:
-            r = post(LLM_URL.rstrip("/") + "/chat/completions", body, {"Authorization": "Bearer " + LLM_KEY}, 90)
-            c = r["choices"][0]["message"]["content"]; return json.loads(c[c.find("{"): c.rfind("}") + 1])
-        except Exception as e:
-            print("  llm error:", str(e)[:200]); time.sleep(2 + attempt * 3)
-    return None
+    try:  # one fast attempt; on rate limit / overload fall back to the scripted planner immediately
+        r = post(LLM_URL.rstrip("/") + "/chat/completions", body, {"Authorization": "Bearer " + LLM_KEY}, 8)
+        c = r["choices"][0]["message"]["content"]; return json.loads(c[c.find("{"): c.rfind("}") + 1])
+    except Exception as e:
+        print("  llm error:", str(e)[:120])
+        if any(k in str(e) for k in ("429", "503", "timed out")): LLM_COOLDOWN["until"] = time.time() + 60
+        return None
 
 def scripted(goal_asset, goal_amount, elements):
     """Deterministic fallback planner (used when no vision key or the LLM is unavailable)."""
@@ -106,7 +120,7 @@ def ocr_text(page, sel=None):
     except Exception as e: return ""
 
 def run_task(dao, prop):
-    pid = prop["id"]; task = prop["action"]["AgentTask"]; goal = task["instructions"]
+    T0["t"] = time.time(); pid = prop["id"]; task = prop["action"]["AgentTask"]; goal = task["instructions"]
     cap = int(task["max_spend"]); m = re.search(r"([\d.]+)\s*NEAR", goal, re.I)
     amount_near = m.group(1) if m else str(cap / 1e24)
     yocto = int(round(float(amount_near) * 1e6)) * 10**18
@@ -116,8 +130,8 @@ def run_task(dao, prop):
     feed(dao, pid, f"Opening browser · planner: {'vision LLM ' + LLM_MODEL if use_llm else 'scripted fallback (no vision key)'}")
     with sync_playwright() as p:
         b = p.chromium.launch(headless=E("HEADLESS", "1") == "1")
-        ctx = b.new_context(viewport={"width": 420, "height": 760}, device_scale_factor=2, record_video_dir=E("RECORD_DIR") or None, record_video_size={"width": 420, "height": 760})
-        page = ctx.new_page(); page.goto(CHARITY, wait_until="networkidle")
+        ctx = b.new_context(viewport={"width": 420, "height": 760},  record_video_dir=E("RECORD_DIR") or None, record_video_size={"width": 420, "height": 760})
+        page = ctx.new_page(); page.goto(CHARITY, wait_until="domcontentloaded"); page.wait_for_selector("button", timeout=15000)
         feed(dao, pid, f"Loaded {CHARITY}", shot(page))
         history = []; address = None
         for step in range(14):
@@ -130,13 +144,17 @@ def run_task(dao, prop):
             if a["action"] == "fail": feed(dao, pid, "Agent could not find a next step: " + a.get("thought", ""), img, phase="failed"); break
             sel = f'[data-lis="{a.get("id")}"]'
             if page.locator(sel).count() == 0: history.append({"error": f"element {a.get('id')} not found"}); continue
-            page.evaluate(HIGHLIGHT_JS, [a["id"], 0, 0]); page.wait_for_timeout(700)
+            page.evaluate(HIGHLIGHT_JS, [a["id"], 0, 0]); page.wait_for_timeout(250)
             label = next((e["label"] for e in els if e["id"] == a["id"]), "")
             desc = {"click": f"Click “{label}”", "type": f"Clear “{label}” and type {a.get('value')}", "select": f"Select {a.get('value')} in “{label}”", "extract": "Read one-time deposit address"}[a["action"]]
             feed(dao, pid, f"{desc} · {a.get('thought','')} [{src}]", shot(page))
             page.evaluate("() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())")
-            if a["action"] == "click": page.click(sel)
-            elif a["action"] == "type": page.click(sel); page.keyboard.press("Control+A"); page.keyboard.press("Delete"); page.type(sel, str(a["value"]), delay=60)
+            before = page.inner_text("body")
+            if a["action"] == "click":
+                page.click(sel)
+                try: page.wait_for_function("t => document.body.innerText !== t && !document.body.innerText.includes('Generating')", arg=before, timeout=10000)
+                except Exception: pass
+            elif a["action"] == "type": page.click(sel); page.keyboard.press("Control+A"); page.keyboard.press("Delete"); page.type(sel, str(a["value"]), delay=15)
             elif a["action"] == "select":
                 try: page.select_option(sel, value=a["value"])
                 except Exception: page.select_option(sel, label=a["value"])
@@ -148,7 +166,7 @@ def run_task(dao, prop):
                 if cand not in dom_ids: cand = next(iter(dom_ids), None)
                 feed(dao, pid, f"Verified address against page text{' and OCR' if ocr_ok else ' (OCR inconclusive)'}: {cand}", shot(page))
                 address = cand; break
-            page.wait_for_load_state("networkidle"); page.wait_for_timeout(500)
+            page.wait_for_timeout(200)
             history.append({"step": step, "action": a["action"], "id": a.get("id"), "value": a.get("value"), "label": label})
         ctx.close(); b.close()
     if not address:
@@ -156,7 +174,8 @@ def run_task(dao, prop):
     feed(dao, pid, f"Reporting address on-chain; contract pays {amount_near} NEAR from treasury…")
     tx = call("report_payout", {"dao_id": dao, "proposal_id": pid, "receiver_id": address, "amount": str(yocto),
         "report": f"Donated via {CHARITY} one-time address"})
-    feed(dao, pid, f"Done. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
+    feed(dao, pid, f"Done in {time.time() - T0['t']:.0f}s. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
+    time.sleep(1)
 
 def main():
     print(f"LisDao agent {AGENT} watching {CONTRACT}", flush=True)
@@ -165,6 +184,6 @@ def main():
             for dao, prop in view("pending_tasks", {"agent": AGENT}): run_task(dao, prop)
         except Exception as e: print("tick error:", e, flush=True)
         if E("ONCE"): break
-        time.sleep(3)
+        time.sleep(1.5)
 
 if __name__ == "__main__": main()

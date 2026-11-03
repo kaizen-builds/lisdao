@@ -41,3 +41,4 @@ input:focus,textarea:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 3
 .agent{width:340px}
 @media (max-width:760px){.agent{width:auto}}
 .shot{max-height:46vh;object-fit:contain;object-position:top;background:#F2F7FB;position:sticky;top:0;z-index:1}
+.btn.big{padding:15px;font-size:16px;font-weight:600}.seg{display:flex;gap:8px;margin:8px 0 16px}.seg .btn{flex:1}
