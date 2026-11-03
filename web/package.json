@@ -1,0 +1,6 @@
+{ "name": "lisdao-web", "private": true,
+  "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+  "dependencies": { "next": "15.5.4", "react": "19.1.1", "react-dom": "19.1.1",
+    "@near-wallet-selector/core": "^9.5.4", "@near-wallet-selector/modal-ui": "^9.5.4",
+    "@near-wallet-selector/my-near-wallet": "^9.5.4", "@near-wallet-selector/meteor-wallet": "^9.5.4",
+    "near-api-js": "^5.0.1" } }
