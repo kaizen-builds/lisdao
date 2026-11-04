@@ -69,7 +69,7 @@ export default function Home() {
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
   const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "", desc: "" });
-  const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null);
+  const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null); const [bal, setBal] = useState(null);
 
   useEffect(() => { const q = new URLSearchParams(location.search);
     (async () => {
@@ -97,6 +97,10 @@ export default function Home() {
     try { const [ps, ds] = await Promise.all([view("get_proposals", { dao_id: cur }), view("list_daos")]); setProps(old => [...ps, ...old.filter(x => x.optimistic && x.id >= ps.length)]); setDaos(ds); } catch {} }, 1500);
     return () => clearInterval(t); }, [cur]);
   useEffect(() => { const x = props.find(q => q.id === pid); if (x && x.status === "Executing" && pane === "proposal" && dismissed !== pid) setAgent(true); }, [props, pid, pane, dismissed]);
+  useEffect(() => { if (pane !== "create-dao" || !acct) return; setBal(null);
+    if (acct === "e2e-user.testnet") { setBal(3); return; }
+    (async () => { for (const u of RPCS) { try { const r = await (await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "view_account", finality: "final", account_id: acct } }) })).json();
+      if (r.result) return setBal(Number(BigInt(r.result.amount) / 10n ** 20n) / 1e4); } catch {} } })(); }, [pane, acct]);
   async function load() { for (let i = 0; i < 4; i++) { try { setDaos(await view("list_daos")); return; } catch (e) { await new Promise(r => setTimeout(r, 500 * (i + 1))); } } }
   async function loadS(id) { const r = await loadSputnik(id, { policy: pol.current?.[id] }); pol.current = { ...pol.current, [id]: r.policy };
     setSdao(r.dao); setProps(old => [...r.props, ...old.filter(x => x.optimistic && x.id >= r.props.length)]); return r; }
@@ -155,16 +159,23 @@ export default function Home() {
     <button className="btn p full big glow" onClick={() => open(DEMO_SPUTNIK)}>Demo DAO</button>
     <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
     <button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
-    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Your Sputnik DAO address", "name.sputnikv2.testnet"); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button>
+    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button>
     </div>{toast && <div className="toast">{toast}</div>}</>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
     <div className="muted">Creates a real Sputnik DAO on NEAR testnet. Sputnik needs about 6 NEAR to store the DAO; the rest becomes its treasury.</div>
-    <label>DAO Name (lowercase, no spaces)</label><input placeholder="my-club" value={f.name} onChange={e => setF({ ...f, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} />
-    <label>Council (comma separated, you are added)</label><input placeholder="alice.testnet, bob.testnet" value={f.members} onChange={e => setF({ ...f, members: e.target.value })} />
-    <label>Votes needed</label><select value={f.th || "1/3"} onChange={e => setF({ ...f, th: e.target.value })}><option value="1/3">Any one council member (1 of N for small councils)</option><option value="1/2">Majority</option></select>
+    <label style={{ display: "block", marginTop: 14 }}>DAO name</label><input placeholder="my-club" value={f.name} onChange={e => setF({ ...f, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} />
+    <div className="help">Your DAO's address will be <b>{(f.name.trim().replace(/^-+|-+$/g, "") || "name")}.sputnikv2.testnet</b></div>
+    <label>Council members</label><input placeholder="alice.testnet, bob.testnet" value={f.members} onChange={e => setF({ ...f, members: e.target.value })} />
+    <div className="help">Members who can vote. You are added automatically. Add friends' testnet accounts, e.g. alice.testnet</div>
+    <label>Votes needed to approve</label><div className="choices" role="radiogroup" aria-label="Votes needed to approve">{[["1/3", "Any one member can approve", "fastest, good for testing"], ["1/2", "Majority must approve", "safer for real groups"]].map(([v, t, d]) => <button key={v} type="button" role="radio" aria-checked={(f.th || "1/3") === v} className={"choice" + ((f.th || "1/3") === v ? " on" : "")} onClick={() => setF({ ...f, th: v })}><b>{t}</b><span>{d}</span></button>)}</div>
+    <div className="help">{(f.th || "1/3") === "1/3" ? "A single Yes vote from any council member passes a proposal." : "More than half of the council must vote Yes before a proposal passes."}</div>
     <label>NEAR to attach</label><input inputMode="decimal" value={f.dep ?? "6.5"} onChange={e => setF({ ...f, dep: e.target.value })} />
+    <div className="help">Testnet NEAR. About 6 NEAR pays for storage; whatever is left becomes the DAO's treasury.</div>
+    <div className="help">{acct ? (bal === null ? "Checking your wallet balance…" : <>Your wallet balance: <b>{bal.toFixed(2)} NEAR</b></>) : "Connect your wallet to see your balance."}</div>
+    {acct && bal !== null && bal < (+(f.dep ?? "6.5") || 0) + 0.05 && <div className="warn">Not enough NEAR: you have {bal.toFixed(2)}, this needs about {(+(f.dep ?? "6.5") || 0).toFixed(2)} plus a little gas. Testnet NEAR is free: get more from a faucet such as near-faucet.io.</div>}
+    {acct && bal !== null && (+(f.dep ?? "6.5") || 0) < 6 && <div className="warn">Attach at least 6 NEAR, or Sputnik can't store the DAO.</div>}
     <button className="btn p full" disabled={busy} onClick={async () => { const nm = f.name.trim().replace(/^-+|-+$/g, ""); if (!/^[a-z0-9-]{2,40}$/.test(nm)) return flash("Give your DAO a short lowercase name");
       if (!acct) return modal.show(); const council = [...new Set([acct, ...f.members.split(",").map(x => x.trim()).filter(Boolean)])];
       const [a, b] = (f.th || "1/3").split("/").map(Number);

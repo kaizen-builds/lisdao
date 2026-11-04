@@ -19,6 +19,8 @@ with sync_playwright() as p:
     m=page("?e2e=1"); m.click("text=Create New DAO"); m.fill("input >> nth=0","test-club"); m.fill("input >> nth=1","a.testnet"); m.click("text=Create Sputnik DAO"); m.wait_for_timeout(500)
     t=last(m); a=t.get("actions",[{}])[0].get("params",{}); pol=json.loads(base64.b64decode(a.get("args",{}).get("args","e30="))).get("policy",{}) if a else {}
     ok("Create New DAO -> Sputnik factory create tx", t.get("receiverId")=="sputnikv2.testnet" and a.get("methodName")=="create" and a["args"]["name"]=="test-club" and "e2e-user.testnet" in pol["roles"][0]["kind"]["Group"], str(t)[:140])
+    m=page("?e2e=1"); m.click("text=Create New DAO"); m.fill("input >> nth=0","my-club"); m.wait_for_timeout(300); tx=m.inner_text("body"); ok("Create DAO helper text + balance + low-balance warning", "my-club.sputnikv2.testnet" in tx and "You are added automatically" in tx and "Your wallet balance: 3.00 NEAR" in tx and "faucet" in tx and "Any one member can approve" in tx)
+    m.click("text=Majority must approve"); ok("Votes needed explains Majority", "More than half" in m.inner_text("body"))
     m=page("?e2e=1"); m.click("text=Create New DAO"); m.click("text=← Back"); m.wait_for_timeout(300); ok("Create DAO Back", m.locator("text=Demo DAO").count()>0)
     # ---- Sputnik demo DAO ----
     m.click("text=Demo DAO"); m.wait_for_selector("text=Votes needed", timeout=15000); m.wait_for_timeout(1500)
