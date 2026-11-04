@@ -8,7 +8,7 @@
 > **Testnet only.** No mainnet deployment and no real money. The "Water Project" charity is a demo page in this repo.
 
 ## What it is
-LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent. The agent's vision model can run on **NEAR AI Cloud** (tested end to end with `z-ai/glm-5.3-flash` and `x-ai/grok-4.7`).
+LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent. The live demo agent runs on **NEAR AI Cloud** (`x-ai/grok-4.7`); proposal #9 was completed end to end with it. A run with the cheaper `z-ai/glm-5.3-flash` (proposal #8) failed safely: it misread one character of the deposit address and the exact-match check refused to pay.
 
 ## How it works
 ```mermaid
@@ -48,6 +48,9 @@ flowchart LR
 | Proposal #6 created | [2h7V8Jk5…](https://testnet.nearblocks.io/txns/2h7V8Jk51PhX9Br7Z14iM6zekUEAmE5opCrE3M8HZLeK) |
 | Proposal #6 payout: agent calls `report_payout`, contract sends 0.1 NEAR to a one-time demo-charity address | [ogdnYy2S…](https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF) |
 | Proposal #7 payout: agent calls `report_payout`, contract sends 0.1 NEAR to a one-time demo-charity address | [78pmYEL4…](https://testnet.nearblocks.io/txns/78pmYEL4PWZVuVnBNhkZsQAuAUKHZbGV1eK4qgUHJ5yu) |
+| Proposal #9 created (live agent on NEAR AI Cloud, `x-ai/grok-4.7`) | [BLWit74i…](https://testnet.nearblocks.io/txns/BLWit74iq8u1BUJ4QMdHacmt73hZeyc9rzWAGHxaQJYd) |
+| Proposal #9 approved by council (VoteApprove → dispatches task) | [2X3LdXx4…](https://testnet.nearblocks.io/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2) |
+| Proposal #9 payout: NEAR AI agent calls `report_payout`, contract sends 0.1 NEAR (~3 min end to end) | [BFijitUn…](https://testnet.nearblocks.io/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4) |
 | Access control (deliberate negative test): `report_payout` from non-agent test account `lisdao-voter-1793741346.testnet` → fails `only agent`, nothing moves | [5FA31kak…](https://testnet.nearblocks.io/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u) |
 | Earlier: task dispatch + 0.1 NEAR payout | [68niAobb…](https://testnet.nearblocks.io/txns/68niAobbxYkYjhdRdPVU6m2AXsaGH5REbXJfSCHkrdSj), [31bQmyYa…](https://testnet.nearblocks.io/txns/31bQmyYaWd6XfvAkHoY2ey2BQzv9H7rqwA359YGPvhHb) |
 | Earlier: 0.5 NEAR above tier → escalated | [6nEvYNDs…](https://testnet.nearblocks.io/txns/6nEvYNDs8FBcFn4TZi9YcXBxWbPAua9Zc3bZF65VzQNr) |
@@ -97,7 +100,7 @@ cd ..
 # 3. Agent (config is read from ~/.lisdao/agent.env; needs the `near` CLI with the agent account's key)
 cd agent && npm ci && pip install playwright && playwright install chromium
 mkdir -p ~/.lisdao && cp ../.env.example ~/.lisdao/agent.env   # then fill in values
-AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
+AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vision endpoint; the live demo uses NEAR AI Cloud (below)
 # NEAR AI Cloud as the agent's model: set LLM_PROVIDER=nearai and NEARAI_API_KEY (NEARAI_MODEL defaults to x-ai/grok-4.7, recommended for live runs; z-ai/glm-5.3-flash is cheaper but misread one character of the deposit address in a live run, which the exact-match check refused).
 # If the LLM's address read doesn't exactly match #deposit-address, the agent asks it to re-read up to 2 more times; it never pays the DOM value unless the LLM's read equals it exactly.
 # Dry run (browser + LLM + #deposit-address check, no feed posts, no on-chain calls):

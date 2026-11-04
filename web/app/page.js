@@ -196,15 +196,15 @@ export default function Home() {
       <p className="lsub">Members vote on a task in plain words. An AI agent does it in a real browser. A NEAR contract pays, only within the limits the DAO set.</p>
       <div className="lcta"><button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button>
         <a className="lbtn ghost" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">View on GitHub</a></div>
-      <p className="lline">Sputnik DAO v2 · NEAR testnet · agent model can run on NEAR AI Cloud</p>
+      <p className="lline">Sputnik DAO v2 · NEAR testnet · agent's model runs on NEAR AI Cloud</p>
       <button className="link ladv" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
       {adv && <div className="ladvbox"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
       <button className="btn full" onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></div>}
     </div>
-    <aside className="lrun" aria-label="Example run"><p className="lsmall">Example run · proposal #6</p><h2>Donate 0.1 NEAR to the water project</h2>
+    <aside className="lrun" aria-label="Example run"><p className="lsmall">Example run · proposal #9 · agent on NEAR AI Cloud</p><h2>Donate 0.1 NEAR to the water project</h2>
       <ol><li><b>1</b>Council votes yes in the Sputnik DAO</li><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR, never the agent</li></ol>
       <a href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></aside></section>
-    <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b></div>
+    <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b> (agent model)</div>
 
     <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><div className="lgrid3">
       <div className="lcard"><p className="lstep">Step 1</p><h3>Vote on a task</h3><p>A council member writes the task in plain words. The council votes in a standard Sputnik DAO. No new multisig.</p></div>
@@ -215,12 +215,15 @@ export default function Home() {
       <div className="lcard warm"><h3>The agent can't vote</h3><p>In the demo DAO only council wallets vote. A task starts only when the DAO's own proposal passes.</p></div>
       <div className="lcard warm"><h3>The agent can't take the treasury</h3><p>Only the agent's account can report a payout, and never above the voted cap. The money sits in escrow, not with the agent.</p></div>
       <div className="lcard warm"><h3>Big payouts go back to a vote</h3><p>Auto-pay starts at 0.2 NEAR per proposer, grows 0.1 per finished task, and stops at 1 NEAR. Above that, the council votes again.</p></div></div>
-      <div className="lcard lnot"><h3>What it doesn't do yet</h3><p>Testnet only, with no real money. One agent account run by one operator. The agent reads the payout address off the page, and the contract trusts it within the cap. There is no timeout refund yet. The live demo agent runs on Gemini today; NEAR AI Cloud has passed dry-run tests. The agent is built for one demo flow, and the charity is a demo page.</p></div></section>
+      <div className="lcard lnot"><h3>What it doesn't do yet</h3><p>Testnet only, with no real money. One agent account run by one operator. The agent reads the payout address off the page, and the contract trusts it within the cap. There is no timeout refund yet. One live run (proposal #8) failed safely when a cheaper model misread one character of the address; the exact-match check refused to pay. The agent is built for one demo flow, and the charity is a demo page.</p></div></section>
 
     <section className="lsec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">On-chain proof</h2><p className="lmuted">Everything is on NEAR testnet. Check it yourself.</p><div className="lgrid4">
       <a className="lcard lp1" href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer"><h3>Sputnik DAO</h3><p>lisdao-demo.sputnikv2.testnet ↗</p></a>
       <a className="lcard lp1" href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer"><h3>Executor contract</h3><p>exec.lisdao-v2-1793741346.testnet ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer"><h3>A payout</h3><p>Contract sends 0.1 NEAR (proposal #6) ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer"><h3>A NEAR AI payout</h3><p>Proposal #9: agent on NEAR AI Cloud, contract sends 0.1 NEAR ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/BLWit74iq8u1BUJ4QMdHacmt73hZeyc9rzWAGHxaQJYd`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 created</h3><p>Plain-words task in Sputnik DAO ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 vote</h3><p>Council votes yes, task dispatched ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer"><h3>Earlier payout</h3><p>Contract sends 0.1 NEAR (proposal #6) ↗</p></a>
       <a className="lcard lp1" href={`${NB}/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u`} target="_blank" rel="noopener noreferrer"><h3>A blocked call</h3><p>Non-agent account fails with “only agent” ↗</p></a></div></section>
 
     <section className="ldark" aria-labelledby="cta-title"><h2 id="cta-title">Create a proposal. Vote yes. Watch the agent.</h2><p>It takes about a minute on testnet.</p>
