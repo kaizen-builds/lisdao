@@ -24,9 +24,9 @@ const txHash = r => { const o = Array.isArray(r) ? r[r.length - 1] : r; return o
 const TX = h => `https://testnet.nearblocks.io/txns/${h}`;
 const short = a => a && a.length > 22 ? a.slice(0, 10) + "…" + a.slice(-8) : a;
 const badge = s => ({ Active: "Voting", Approved: "Passed", Executing: "Passed", Executed: "Passed", Escalated: "Voting", Rejected: "Rejected", Failed: "Rejected" }[s]);
-// Meteor's near-connect executor keeps its sign-in record under this key; without it signAndSendTransaction silently returns nothing.
-const walletLive = () => { try { const id = localStorage.getItem("selected-wallet"); if (!id) return false; return !/meteor/.test(id) || !!localStorage.getItem(id.replace(/"/g, "") + ":meteor-account-data"); } catch { return true; } };
-const resetWallet = () => { try { const id = (localStorage.getItem("selected-wallet") || "").replace(/"/g, ""); Object.keys(localStorage).filter(k => k === "selected-wallet" || (id && k.startsWith(id + ":"))).forEach(k => localStorage.removeItem(k)); } catch {} };
+// Wallet selector + Meteor module. A session is live only when the selector has an account AND the Meteor SDK reports signed in.
+const SEL_KEYS = /^(near-wallet-selector|_meteor_wallet|meteor|near_app_wallet|selected-wallet)/;
+const resetWallet = () => { try { Object.keys(localStorage).filter(k => SEL_KEYS.test(k)).forEach(k => localStorage.removeItem(k)); } catch {} };
 const yocto = y => (Number(BigInt(y) / 10n ** 20n) / 1e4).toFixed(4);
 const fmt = ns => new Date(Number(BigInt(ns) / 1000000n)).toLocaleString();
 
@@ -91,13 +91,20 @@ export default function Home() {
       window.__txs = []; const fake = { wallet: async () => { if (q.get("e2e") === "dead") throw new Error("No accounts found"); return ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }); }, disconnect: async () => {} };
       setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); return;
     }
-    const { NearConnector } = await import("@hot-labs/near-connect");
-    const nc = new NearConnector({ network: "testnet", autoConnect: true, features: { testnet: true } });
-    nc.on("wallet:signIn", t => { setNeedRe(false); setAcct(t.accounts?.[0]?.accountId); if (!walletLive()) console.warn("wallet: signed in but no Meteor session record"); });
-    nc.on("wallet:signOut", () => setAcct(undefined));
-    setSel(nc); setModal({ show: () => { if (!walletLive()) resetWallet(); return nc.connect().catch(e => console.warn("connect", e)); } });
-    if (localStorage.getItem("selected-wallet") && !walletLive()) { console.warn("wallet: persisted account without live session, resetting"); resetWallet(); setNeedRe(true); }
-    else nc.getConnectedWallet().then(({ accounts }) => setAcct(accounts?.[0]?.accountId)).catch(() => {});
+    const [{ setupWalletSelector, internalActionToNaj }, { setupMeteorWallet }] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/meteor-wallet")]);
+    const selector = await setupWalletSelector({ network: "testnet", modules: [setupMeteorWallet()] });
+    const getW = () => selector.wallet("meteor-wallet");
+    const adapter = { // same shape the rest of the page uses: wallet(), disconnect()
+      wallet: async () => { const w = await getW(); if (!(await w.isSignedIn())) throw new Error("No accounts found");
+        return { signAndSendTransaction: t => w.signAndSendTransaction({ ...t, actions: t.actions.map(internalActionToNaj) }) }; },
+      disconnect: async () => { try { await (await getW()).signOut(); } catch {} resetWallet(); } };
+    const sync = st => { const id = st.accounts?.find(x => x.active)?.accountId || st.accounts?.[0]?.accountId; setAcct(id); if (id) setNeedRe(false); };
+    selector.store.observable.subscribe(sync);
+    let wP = getW(); // resolve the module now so the click can open the popup without waiting
+    setSel(adapter); setModal({ show: () => { wP.then(w => w.signIn({ contractId: "lisdao-demo.sputnikv2.testnet", methodNames: [] }))
+      .then(() => { setNeedRe(false); sync(selector.store.getState()); }).catch(e => { console.warn("connect", e); wP = getW(); }); } });
+    const st = selector.store.getState();
+    if (st.accounts?.length) { const w = await getW(); if (await w.isSignedIn()) sync(st); else { console.warn("wallet: persisted account without live Meteor session"); try { await w.signOut(); } catch {} resetWallet(); setAcct(undefined); setNeedRe(true); } }
   })(); }, []);
   useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
     if (isSputnik(cur)) { try { await loadS(cur); } catch {} return; }
