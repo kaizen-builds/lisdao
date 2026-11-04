@@ -31,7 +31,7 @@ flowchart LR
 ## Payout tiers
 | Rule | Enforced in |
 |---|---|
-| Auto-approve tier = 0.2 NEAR + 0.1 NEAR per reputation point, max 1 NEAR | `executor/src/lib.rs` `auto_cap_of` |
+| Proposer's auto-approve limit = 0.2 NEAR + 0.1 NEAR per proposer reputation point, max 1 NEAR (not an agent fee — the agent receives nothing) | `executor/src/lib.rs` `auto_cap_of` |
 | Amount must be > 0, ≤ `max_spend`, ≤ escrow | `report_payout` (`"over spending cap"`) |
 | Within tier → pay receiver, return the rest to the DAO, proposer +1 reputation | `report_payout` |
 | Above tier → escrow back to the DAO, executor opens a Sputnik `Transfer` proposal | `report_payout` |
@@ -44,9 +44,10 @@ flowchart LR
 | DAO | [lisdao-demo.sputnikv2.testnet](https://testnet.nearblocks.io/address/lisdao-demo.sputnikv2.testnet) |
 | Executor | [exec.lisdao-v2-1793741346.testnet](https://testnet.nearblocks.io/address/exec.lisdao-v2-1793741346.testnet) |
 | Proposal #5 created | [2RFPFNEW…](https://testnet.nearblocks.io/txns/2RFPFNEWBn9J7Lya8tLfdxGTWcG9SjYbMNwyiBBHtWJF) |
-| Proposal #5 paid by executor | [C4gPFrU9…](https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6) |
+| Proposal #5 approved by council (VoteApprove → dispatches task 4; payout tx not recorded) | [C4gPFrU9…](https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6) |
 | Proposal #6 created | [2h7V8Jk5…](https://testnet.nearblocks.io/txns/2h7V8Jk51PhX9Br7Z14iM6zekUEAmE5opCrE3M8HZLeK) |
-| Proposal #6 paid by executor | [ogdnYy2S…](https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF) |
+| Proposal #6 payout: agent calls `report_payout`, contract sends 0.1 NEAR to a one-time demo-charity address | [ogdnYy2S…](https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF) |
+| Access control (deliberate negative test): `report_payout` from non-agent test account `lisdao-voter-1793741346.testnet` → fails `only agent`, nothing moves | [5FA31kak…](https://testnet.nearblocks.io/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u) |
 | Earlier: task dispatch + 0.1 NEAR payout | [68niAobb…](https://testnet.nearblocks.io/txns/68niAobbxYkYjhdRdPVU6m2AXsaGH5REbXJfSCHkrdSj), [31bQmyYa…](https://testnet.nearblocks.io/txns/31bQmyYaWd6XfvAkHoY2ey2BQzv9H7rqwA359YGPvhHb) |
 | Earlier: 0.5 NEAR above tier → escalated | [6nEvYNDs…](https://testnet.nearblocks.io/txns/6nEvYNDs8FBcFn4TZi9YcXBxWbPAua9Zc3bZF65VzQNr) |
 
