@@ -66,10 +66,11 @@ flowchart LR
 <a id="limits"></a>
 **Known limits**
 - Testnet only; single agent account (a central operator); no TEE / attestation of the agent.
-- The vote does not bind the receiver. `report_payout` pays whatever `receiver_id` the agent reports (up to `max_spend`); the contract does not check it against the proposal. A hostile page could try to steer the agent.
+- The vote does not bind the receiver. `report_payout` pays whatever `receiver_id` the agent reports (up to `max_spend`); the contract does not check it against the proposal. The agent takes the address only from the page's `#deposit-address` element, requires the planner's copy to match exactly, and is locked to the charity origin; these are off-chain checks (see `docs/SECURITY.md`).
 - Any account under `.sputnikv2.testnet` can dispatch, and anyone can create one; there is no DAO allow-list. Reputation is per proposer across all DAOs, so it can be raised in a throwaway DAO.
 - No timeout refund: only the agent can settle a task. If the agent stops, the escrow stays in the executor until it reports. The owner (a single key) can swap the agent with `set_agent`.
 - Payout transfers have no callback: if a transfer fails, the task is still marked `Executed` and the refunded amount lands back in the executor, not the DAO.
+- The UI shows task status from the agent feed, not from the chain; the NearBlocks links are the proof.
 - Agent tasks are tuned for the demo charity flow, not arbitrary websites.
 - `legacy/contract/` is an earlier all-in-one DAO prototype, not used by the web app.
 
