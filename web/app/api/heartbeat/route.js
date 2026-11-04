@@ -1,4 +1,4 @@
-// Agent heartbeat: the agent POSTs every few seconds; the UI shows "agent online" / "agent is starting".
+// Agent heartbeat: the agent POSTs on every state change and otherwise every ~20s; the UI shows "agent online" / "agent is starting".
 import { putJson, getJsonFresh } from "../../../lib/store";
 export const dynamic = "force-dynamic";
 export async function POST(req) {
@@ -12,5 +12,5 @@ export async function POST(req) {
 }
 export async function GET() {
   const hb = await getJsonFresh("heartbeat.json");
-  return Response.json({ ...(hb || {}), online: !!hb && Date.now() - hb.t < 30000, now: Date.now() }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ ...(hb || {}), online: !!hb && Date.now() - hb.t < 45000, now: Date.now() }, { headers: { "Cache-Control": "no-store" } });
 }

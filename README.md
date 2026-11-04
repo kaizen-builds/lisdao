@@ -57,7 +57,7 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
  web (Next.js, NEAR Connector) ── add_proposal / act_proposal ──► Sputnik DAO (lisdao-demo.sputnikv2.testnet)
       ▲ polls proposals, tasks, agent feed                           │ vote passes → FunctionCall + escrow
       │                                                              ▼
- /api/agent (Vercel Blob) ◄── steps ── agent (box) ◄─ pending_tasks ─ LisDao executor (exec.lisdao-v2-…testnet)
+ /api/agent (Neon Postgres) ◄── steps ── agent (box) ◄─ pending_tasks ─ LisDao executor (exec.lisdao-v2-…testnet)
                                          │  report_payout ─────────►  ├─ within tier: pay receiver, refund rest, +reputation
                                          ▼                            └─ above tier: refund escrow + Sputnik Transfer proposal
                      Playwright browser + vision LLM (+ OCR check) → demo charity → one-time NEAR address
@@ -88,14 +88,14 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
 ## Run
 
 1. `cd executor && cargo test`, then `cd ../contract && cargo test`.
-2. `cd web && npm i && npm run dev`. Set `BLOB_READ_WRITE_TOKEN` and `AGENT_FEED_TOKEN` to match hosting.
+2. `cd web && npm i && npm run dev`. Set `DATABASE_URL` (Neon Postgres; optional, in-memory without it) and `AGENT_FEED_TOKEN` to match hosting.
 3. `cd agent && npm i && pip install playwright && playwright install chromium`, then:
    `WEB_URL=https://lisdao.vercel.app AGENT_FEED_TOKEN=... LLM_API_KEY=... LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai LLM_MODEL=gemini-3.1-flash-lite python browser_agent.py`
    Any OpenAI-compatible vision endpoint works (for example NEAR AI Cloud, `LLM_BASE_URL=https://cloud-api.near.ai/v1`).
 
 ## Libraries
 
-near-sdk, near-api-js, @hot-labs/near-connect (NEAR Connector), Next.js/React, @vercel/blob, qrcode, Playwright, tesseract.js. Built with help from AI coding tools.
+near-sdk, near-api-js, @hot-labs/near-connect (NEAR Connector), Next.js/React, @neondatabase/serverless (Neon Postgres), qrcode, Playwright, tesseract.js. Built with help from AI coding tools.
 
 ## License
 

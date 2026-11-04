@@ -199,13 +199,17 @@ def beat():
     threading.Thread(target=go, daemon=True).start()
 
 def heartbeat_loop():
-    n = 0
+    # Post only when the state changes, otherwise every ~20s (UI treats >45s silence as offline).
+    last, last_t, n = None, 0, 0
     while True:
-        beat(); n += 1
-        if n % 12 == 0:  # log line every ~60s
+        cur = (STATE["state"], STATE["dao_id"], STATE["proposal_id"])
+        if cur != last or time.time() - last_t >= 20:
+            beat(); last, last_t = cur, time.time()
+        n += 1
+        if n % 120 == 0:  # log line every ~60s
             age = time.time() - STATE["last_poll"]
             print(f"{time.strftime('%H:%M:%S')} heartbeat · {STATE['state']} · {STATE['polls']} polls · last poll {age:.1f}s ago ({STATE['last_poll_ms']}ms)", flush=True)
-        time.sleep(5)
+        time.sleep(0.5)
 
 def main():
     print(f"{time.strftime('%H:%M:%S')} LisDao agent {AGENT} watching {CONTRACT} + Sputnik executor {EXECUTOR} · poll {POLL}s · LLM {LLM_MODEL} @ {LLM_URL}", flush=True)
