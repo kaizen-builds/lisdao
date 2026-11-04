@@ -57,7 +57,7 @@ with sync_playwright() as p:
     ok("Submit reaches wallet call even if RPC read fails", len(txs(m))==n0+1 and "Could not reach" not in m.inner_text("body"), m.inner_text(".grid")[-200:])
     m=page(f"?e2e=dead&dao={D}"); m.wait_for_selector(".card >> text=Donate 0.1", timeout=15000)
     m.click("text=Create New Proposal"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(2000)
-    ok("Dead wallet session -> reconnect message", "Wallet session expired" in m.inner_text("body") and m.evaluate("!!window.__connectClicked"))
+    ok("Dead wallet session -> reconnect message", "Reconnect wallet" in m.inner_text("body") and m.evaluate("!!window.__connectClicked"))
     ext=[]; m=b.new_page(); m.on("request", lambda r: ext.append(r.url) if ("rpc.testnet.near.org" in r.url or "fastnear" in r.url) else None); m.goto(B+f"?e2e=1&dao={D}"); m.wait_for_timeout(6000)
     ok("Browser makes no direct public-RPC calls (uses /api/rpc)", not ext, str(ext[:2]))
     ok("No page errors", not errs, "; ".join(errs)[:300])

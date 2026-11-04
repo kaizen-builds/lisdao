@@ -24,6 +24,9 @@ const txHash = r => { const o = Array.isArray(r) ? r[r.length - 1] : r; return o
 const TX = h => `https://testnet.nearblocks.io/txns/${h}`;
 const short = a => a && a.length > 22 ? a.slice(0, 10) + "…" + a.slice(-8) : a;
 const badge = s => ({ Active: "Voting", Approved: "Passed", Executing: "Passed", Executed: "Passed", Escalated: "Voting", Rejected: "Rejected", Failed: "Rejected" }[s]);
+// Meteor's near-connect executor keeps its sign-in record under this key; without it signAndSendTransaction silently returns nothing.
+const walletLive = () => { try { const id = localStorage.getItem("selected-wallet"); if (!id) return false; return !/meteor/.test(id) || !!localStorage.getItem(id.replace(/"/g, "") + ":meteor-account-data"); } catch { return true; } };
+const resetWallet = () => { try { const id = (localStorage.getItem("selected-wallet") || "").replace(/"/g, ""); Object.keys(localStorage).filter(k => k === "selected-wallet" || (id && k.startsWith(id + ":"))).forEach(k => localStorage.removeItem(k)); } catch {} };
 const yocto = y => (Number(BigInt(y) / 10n ** 20n) / 1e4).toFixed(4);
 const fmt = ns => new Date(Number(BigInt(ns) / 1000000n)).toLocaleString();
 
@@ -65,7 +68,7 @@ function Stepper({ at }) {
 const Next = ({ children }) => <div className="next fade">→ {children}</div>;
 
 export default function Home() {
-  const [sel, setSel] = useState(); const [modal, setModal] = useState(); const [acct, setAcct] = useState();
+  const [sel, setSel] = useState(); const [modal, setModal] = useState(); const [acct, setAcct] = useState(); const [needRe, setNeedRe] = useState(false);
   const [daos, setDaos] = useState([]); const [cur, setCur] = useState(null); const [props, setProps] = useState([]);
   const [votes, setVotes] = useState([]); const [pane, setPane] = useState("summary"); const [pid, setPid] = useState(null);
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
@@ -90,10 +93,11 @@ export default function Home() {
     }
     const { NearConnector } = await import("@hot-labs/near-connect");
     const nc = new NearConnector({ network: "testnet", autoConnect: true, features: { testnet: true } });
-    nc.on("wallet:signIn", t => setAcct(t.accounts?.[0]?.accountId));
+    nc.on("wallet:signIn", t => { setNeedRe(false); setAcct(t.accounts?.[0]?.accountId); if (!walletLive()) console.warn("wallet: signed in but no Meteor session record"); });
     nc.on("wallet:signOut", () => setAcct(undefined));
-    setSel(nc); setModal({ show: () => nc.connect().catch(e => console.warn("connect", e)) });
-    nc.getConnectedWallet().then(({ accounts }) => setAcct(accounts?.[0]?.accountId)).catch(() => {});
+    setSel(nc); setModal({ show: () => { if (!walletLive()) resetWallet(); return nc.connect().catch(e => console.warn("connect", e)); } });
+    if (localStorage.getItem("selected-wallet") && !walletLive()) { console.warn("wallet: persisted account without live session, resetting"); resetWallet(); setNeedRe(true); }
+    else nc.getConnectedWallet().then(({ accounts }) => setAcct(accounts?.[0]?.accountId)).catch(() => {});
   })(); }, []);
   useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
     if (isSputnik(cur)) { try { await loadS(cur); } catch {} return; }
@@ -136,6 +140,7 @@ export default function Home() {
     if (isSputnik(cur)) { try { await loadS(cur); } catch {} return; }
     try { await load(); if (cur !== null) { const ps = await view("get_proposals", { dao_id: cur }); setProps(old => [...ps, ...old.filter(x => x.optimistic && x.id >= ps.length)]); if (pid !== null) setVotes(await view("get_votes", { dao_id: cur, proposal_id: pid })); } } catch {}
   }
+  function reconnect() { resetWallet(); live.current = null; setAcct(undefined); setNeedRe(true); setErr("Reconnect wallet: the wallet session ended. Approve the connect request, then press the button again."); flash("Reconnect wallet"); modal?.show(); }
   // Returns true on success. Shows a short message on failure instead of throwing.
   async function call(methodName, args, deposit, receiverId = CONTRACT, gas = "100000000000000") {
     if (!acct) { modal?.show(); return false; }
@@ -143,9 +148,9 @@ export default function Home() {
     setErr(""); setPhase("wallet");
     try { let w;
       try { w = live.current || await withTimeout(sel.wallet(), 8000, "no wallet"); live.current = w; }
-      catch (e) { console.error("wallet session", e); setErr("Wallet session expired, reconnect"); flash("Wallet session expired, reconnect"); setAcct(undefined); modal?.show(); return false; }
+      catch (e) { console.error("wallet session", e); reconnect(); return false; }
       const res = await withTimeout(w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] }), 60000, "WALLET_TIMEOUT");
-      const h = txHash(res); if (!h) throw new Error("The wallet did not send a transaction");
+      const h = txHash(res); if (!h) { if (res == null && acct !== "e2e-user.testnet") { reconnect(); return false; } throw new Error("The wallet did not send a transaction"); }
       setPhase("confirm"); if (h !== "e2e") await verifyTx(h, acct);
       setLastTx(h); refresh(); return h;
     } catch (e) { console.error("tx", e); const m = String(e?.message || e); const msg = m === "WALLET_TIMEOUT" ? "Wallet did not respond. Open your wallet and try again." : m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : /reject|cancel|closed|denied/i.test(m) ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 100);
@@ -157,7 +162,7 @@ export default function Home() {
   const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>
     <div style={{ position: "relative" }}>{acct
       ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
-      : <button className="btn" onClick={() => modal?.show()}>👛 Connect wallet</button>}
+      : <button className="btn" onClick={() => modal?.show()}>👛 {needRe ? "Reconnect wallet" : "Connect wallet"}</button>}
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
         <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
 
