@@ -1,6 +1,6 @@
 // Same-origin NEAR testnet JSON-RPC passthrough: whitelisted read methods, server-side fallback, ~1 s cache.
 export const dynamic = "force-dynamic";
-const UP = ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];
+const UP = ["https://test.rpc.fastnear.com", "https://rpc.testnet.near.org"]; // fastnear first: rpc.testnet.near.org rate-limits (429) from Vercel
 const OK = new Set(["query", "tx", "EXPERIMENTAL_tx_status", "status", "block", "gas_price"]);
 const cache = new Map();
 export async function POST(req) {
