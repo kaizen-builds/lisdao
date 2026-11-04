@@ -14,3 +14,4 @@ demo/*.mp4
 !.env.example
 agent/eng.traineddata
 *.traineddata
+__pycache__/

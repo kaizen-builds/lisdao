@@ -175,28 +175,59 @@ export default function Home() {
   }
   const dao = isSputnik(cur) ? (sdao?.id === cur ? sdao : null) : daos.find(d => d.id === cur); const p = props.find(x => x.id === pid);
 
-  const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>
-    <div style={{ position: "relative" }}>{acct
+  const wallet = <div className="navw" style={{ position: "relative" }}>{acct
       ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
       : !wReady ? <button className="btn" disabled aria-busy="true">👛 …</button>
       : <button className="btn" onClick={() => modal?.show()}>👛 {needRe ? "Reconnect wallet" : "Connect wallet"}</button>}
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
-        <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
+        <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div>;
+  const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>{wallet}</div>;
 
-  if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
-    <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><p className="pitch">A DAO whose AI agent does real-world tasks after members vote.</p>
-    <div className="hint" style={{ marginTop: -6 }}>Built on Sputnik DAO · the DAO keeps the money and the votes, LisDao adds the agent</div>
-    <div className="hint">Agent model can run on NEAR AI Cloud</div>
-    <ol className="how">
-      <li style={{ animationDelay: ".05s" }}><b>1</b>Vote on a task</li>
-      <li style={{ animationDelay: ".15s" }}><b>2</b>The agent does it in a real browser</li>
-      <li style={{ animationDelay: ".25s" }}><b>3</b>The DAO pays automatically</li></ol>
-    <button className="btn p full big glow" onClick={() => open(DEMO_SPUTNIK)}>Demo DAO</button>
-    <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
-    <button className="link" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
-    {adv && <><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
-    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></>}
-    </div>{toast && <div className="toast">{toast}</div>}</>;
+  const NB = "https://testnet.nearblocks.io";
+  if (cur === null && pane !== "create-dao") return <div className="lp">
+    <header className="lnav"><div className="lnav-in">
+      <a className="lbrand" href="#top" aria-label="LisDao home"><Drop size={22} /><Wordmark /><span className="lbadge">NEAR testnet</span></a>
+      <nav className="llinks" aria-label="Sections"><a href="#how">How it works</a><a href="#limits">Limits</a><a href="#proof">Proof</a><a href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">GitHub</a></nav>
+      <div className="lright">{wallet}<button className="lbtn sm" onClick={() => open(DEMO_SPUTNIK)}>Open demo</button></div></div></header>
+    <main className="lmain fade" id="top">
+    <section className="lhero" aria-labelledby="hero-title"><div className="lhero-l">
+      <p className="lkick">An AI agent for Sputnik DAOs</p>
+      <h1 id="hero-title">A DAO that gets things done.</h1>
+      <p className="lsub">Members vote on a task in plain words. An AI agent does it in a real browser. A NEAR contract pays, only within the limits the DAO set.</p>
+      <div className="lcta"><button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button>
+        <a className="lbtn ghost" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">View on GitHub</a></div>
+      <p className="lline">Sputnik DAO v2 · NEAR testnet · agent model can run on NEAR AI Cloud</p>
+      <button className="link ladv" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
+      {adv && <div className="ladvbox"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
+      <button className="btn full" onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></div>}
+    </div>
+    <aside className="lrun" aria-label="Example run"><p className="lsmall">Example run · proposal #6</p><h2>Donate 0.1 NEAR to the water project</h2>
+      <ol><li><b>1</b>Council votes yes in the Sputnik DAO</li><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR, never the agent</li></ol>
+      <a href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></aside></section>
+    <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b></div>
+
+    <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><div className="lgrid3">
+      <div className="lcard"><p className="lstep">Step 1</p><h3>Vote on a task</h3><p>A council member writes the task in plain words. The council votes in a standard Sputnik DAO. No new multisig.</p></div>
+      <div className="lcard"><p className="lstep">Step 2</p><h3>The agent does it</h3><p>When the vote passes, the DAO escrows the budget. The agent works in a real browser, and every step shows in a live feed.</p></div>
+      <div className="lcard"><p className="lstep">Step 3</p><h3>The contract pays</h3><p>The agent reports on-chain. The contract pays within the cap, and sends bigger amounts back to a council vote.</p></div></div></section>
+
+    <section className="lsec" id="limits" aria-labelledby="lim-title"><h2 id="lim-title">Limits you can check</h2><p className="lmuted">The rules live in a contract, not in a prompt.</p><div className="lgrid3">
+      <div className="lcard warm"><h3>The agent can't vote</h3><p>In the demo DAO only council wallets vote. A task starts only when the DAO's own proposal passes.</p></div>
+      <div className="lcard warm"><h3>The agent can't take the treasury</h3><p>Only the agent's account can report a payout, and never above the voted cap. The money sits in escrow, not with the agent.</p></div>
+      <div className="lcard warm"><h3>Big payouts go back to a vote</h3><p>Auto-pay starts at 0.2 NEAR per proposer, grows 0.1 per finished task, and stops at 1 NEAR. Above that, the council votes again.</p></div></div>
+      <div className="lcard lnot"><h3>What it doesn't do yet</h3><p>Testnet only, with no real money. One agent account run by one operator. The agent reads the payout address off the page, and the contract trusts it within the cap. There is no timeout refund yet. The live demo agent runs on Gemini today; NEAR AI Cloud has passed dry-run tests. The agent is built for one demo flow, and the charity is a demo page.</p></div></section>
+
+    <section className="lsec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">On-chain proof</h2><p className="lmuted">Everything is on NEAR testnet. Check it yourself.</p><div className="lgrid4">
+      <a className="lcard lp1" href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer"><h3>Sputnik DAO</h3><p>lisdao-demo.sputnikv2.testnet ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer"><h3>Executor contract</h3><p>exec.lisdao-v2-1793741346.testnet ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer"><h3>A payout</h3><p>Contract sends 0.1 NEAR (proposal #6) ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u`} target="_blank" rel="noopener noreferrer"><h3>A blocked call</h3><p>Non-agent account fails with “only agent” ↗</p></a></div></section>
+
+    <section className="ldark" aria-labelledby="cta-title"><h2 id="cta-title">Create a proposal. Vote yes. Watch the agent.</h2><p>It takes about a minute on testnet.</p>
+      <button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Open the demo</button></section>
+    </main>
+    <footer className="lfoot">LisDao · Built at NEAR HACKATHON · Testnet only, no real money · MIT license</footer>
+    {toast && <div className="toast">{toast}</div>}</div>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
