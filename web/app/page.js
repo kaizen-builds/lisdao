@@ -203,7 +203,7 @@ export default function Home() {
     </div>
     <aside className="lrun" aria-label="Example run"><p className="lsmall">Example run · proposal #9 · agent on NEAR AI Cloud</p><h2>Donate 0.1 NEAR to the water project</h2>
       <ol><li><b>1</b>Council votes yes in the Sputnik DAO</li><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR, never the agent</li></ol>
-      <a href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></aside></section>
+      <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></aside></section>
     <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b> (agent model)</div>
 
     <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><div className="lgrid3">
