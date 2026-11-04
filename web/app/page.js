@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Drop, Wordmark } from "./Logo";
+import { VoteArt, WorkArt, PayArt } from "./Sticks";
 import { loadSputnik, isSputnik, viewAt, rpcCall, DEMO_SPUTNIK, EXECUTOR, FACTORY } from "../lib/sputnik";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
@@ -186,30 +187,38 @@ export default function Home() {
   const NB = "https://testnet.nearblocks.io";
   if (cur === null && pane !== "create-dao") return <div className="lp">
     <header className="lnav"><div className="lnav-in">
-      <a className="lbrand" href="#top" aria-label="LisDao home"><Drop size={22} /><Wordmark /><span className="lbadge">NEAR testnet</span></a>
-      <nav className="llinks" aria-label="Sections"><a href="#how">How it works</a><a href="#limits">Limits</a><a href="#proof">Proof</a><a href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">GitHub</a></nav>
-      <div className="lright">{wallet}<button className="lbtn sm" onClick={() => open(DEMO_SPUTNIK)}>Open demo</button></div></div></header>
+      <a className="lbrand" href="#top" aria-label="LisDao home"><Wordmark size={17} /></a>
+      <nav className="llinks" aria-label="Sections"><a href="#how">How it works</a><a href="#limits">Limits</a><a href="#proof">Proof</a></nav>
+      <div className="lright">{wallet}<a className="lgh" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></header>
     <main className="lmain fade" id="top">
-    <section className="lhero" aria-labelledby="hero-title"><div className="lhero-l">
-      <p className="lkick">An AI agent for Sputnik DAOs</p>
-      <h1 id="hero-title">A DAO that gets things done.</h1>
-      <p className="lsub">Members vote on a task in plain words. An AI agent does it in a real browser. A NEAR contract pays, only within the limits the DAO set.</p>
-      <div className="lcta"><button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button>
-        <a className="lbtn ghost" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">View on GitHub</a></div>
-      <p className="lline">Sputnik DAO v2 · NEAR testnet · agent's model runs on NEAR AI Cloud</p>
+    <section className="lhero" aria-labelledby="hero-title">
+      <Drop size={44} />
+      <h1 id="hero-title">Your DAO votes.<br />An AI agent does the work.</h1>
+      <p className="lsub">Community members vote on a task in plain words, in a Sputnik DAO. When the vote passes, an AI agent does it in a real browser, and a NEAR contract pays within the limits your DAO sets.</p>
+      <div className="lcta"><button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button></div>
+      <p className="lline">Testnet only. No real money.</p>
       <button className="link ladv" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
       {adv && <div className="ladvbox"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
       <button className="btn full" onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></div>}
-    </div>
-    <aside className="lrun" aria-label="Example run"><p className="lsmall">Example run · proposal #9 · agent on NEAR AI Cloud</p><h2>Donate 0.1 NEAR to the water project</h2>
-      <ol><li><b>1</b>Council votes yes in the Sputnik DAO</li><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR, never the agent</li></ol>
-      <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></aside></section>
+    </section>
     <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b> (agent model)</div>
 
-    <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><div className="lgrid3">
-      <div className="lcard"><p className="lstep">Step 1</p><h3>Vote on a task</h3><p>A council member writes the task in plain words. The council votes in a standard Sputnik DAO. No new multisig.</p></div>
-      <div className="lcard"><p className="lstep">Step 2</p><h3>The agent does it</h3><p>When the vote passes, the DAO escrows the budget. The agent works in a real browser, and every step shows in a live feed.</p></div>
-      <div className="lcard"><p className="lstep">Step 3</p><h3>The contract pays</h3><p>The agent reports on-chain. The contract pays within the cap, and sends bigger amounts back to a council vote.</p></div></div></section>
+    <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title" className="sr">How it works</h2><div className="lgrid3">
+      <div className="lcard"><VoteArt /><p className="lnum">1</p><h3>The community votes</h3><p>Members vote on a task in plain words, in a standard Sputnik DAO. In the demo DAO only council wallets vote.</p></div>
+      <div className="lcard"><WorkArt /><p className="lnum">2</p><h3>The agent works</h3><p>It opens a real browser and does the task. You watch every step live.</p></div>
+      <div className="lcard"><PayArt /><p className="lnum">3</p><h3>The contract pays</h3><p>Small payouts go through. Bigger ones go back to a vote.</p></div></div>
+      <p className="ltrust">The agent can't vote and can't take the treasury. Check it on NEAR testnet: <a href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer">the DAO</a>, <a href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer">the contract</a>, <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">a payout</a>.</p></section>
+
+    <section className="lsec" aria-labelledby="run-title"><h2 id="run-title">An example run: proposal #9</h2><p className="lmuted">The live demo agent's model runs on NEAR AI Cloud.</p><div className="lgrid2">
+      <div className="lcard lvote" aria-label="The vote"><p className="lsmall">Step 1 · Sputnik DAO vote</p><h3>“Donate 0.1 NEAR to the water project”</h3>
+        <div className="lvrow"><span className="badge Passed">Passed</span><span className="lsmall">1 of 1 vote needed</span></div>
+        <div className="bar"><i style={{ width: "100%" }} /></div>
+        <div className="lvbtns"><span className="lyes">✓ Yes · 1</span><span className="lno">No · 0</span></div>
+        <p className="lsmall">In the demo DAO only council wallets vote.</p>
+        <a href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} target="_blank" rel="noopener noreferrer">See the vote on NearBlocks ↗</a></div>
+      <div className="lcard lrun" aria-label="Example run"><p className="lsmall">Steps 2 and 3 · agent on NEAR AI Cloud</p><h3>Then the agent works and the contract pays</h3>
+        <ol><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR from escrow</li></ol>
+        <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></div></div></section>
 
     <section className="lsec" id="limits" aria-labelledby="lim-title"><h2 id="lim-title">Limits you can check</h2><p className="lmuted">The rules live in a contract, not in a prompt.</p><div className="lgrid3">
       <div className="lcard warm"><h3>The agent can't vote</h3><p>In the demo DAO only council wallets vote. A task starts only when the DAO's own proposal passes.</p></div>
@@ -220,16 +229,16 @@ export default function Home() {
     <section className="lsec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">On-chain proof</h2><p className="lmuted">Everything is on NEAR testnet. Check it yourself.</p><div className="lgrid4">
       <a className="lcard lp1" href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer"><h3>Sputnik DAO</h3><p>lisdao-demo.sputnikv2.testnet ↗</p></a>
       <a className="lcard lp1" href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer"><h3>Executor contract</h3><p>exec.lisdao-v2-1793741346.testnet ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer"><h3>A NEAR AI payout</h3><p>Proposal #9: agent on NEAR AI Cloud, contract sends 0.1 NEAR ↗</p></a>
       <a className="lcard lp1" href={`${NB}/txns/BLWit74iq8u1BUJ4QMdHacmt73hZeyc9rzWAGHxaQJYd`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 created</h3><p>Plain-words task in Sputnik DAO ↗</p></a>
       <a className="lcard lp1" href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 vote</h3><p>Council votes yes, task dispatched ↗</p></a>
+      <a className="lcard lp1" href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer"><h3>A NEAR AI payout</h3><p>Proposal #9: agent on NEAR AI Cloud, contract sends 0.1 NEAR ↗</p></a>
       <a className="lcard lp1" href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer"><h3>Earlier payout</h3><p>Contract sends 0.1 NEAR (proposal #6) ↗</p></a>
       <a className="lcard lp1" href={`${NB}/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u`} target="_blank" rel="noopener noreferrer"><h3>A blocked call</h3><p>Non-agent account fails with “only agent” ↗</p></a></div></section>
 
     <section className="ldark" aria-labelledby="cta-title"><h2 id="cta-title">Create a proposal. Vote yes. Watch the agent.</h2><p>It takes about a minute on testnet.</p>
       <button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Open the demo</button></section>
     </main>
-    <footer className="lfoot">LisDao · Built at NEAR HACKATHON · Testnet only, no real money · MIT license</footer>
+    <footer className="lfoot">Built at NEAR HACKATHON · <a href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">MIT license</a></footer>
     {toast && <div className="toast">{toast}</div>}</div>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
@@ -274,12 +283,13 @@ export default function Home() {
         <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>DAO summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
         {(() => { const all = props.slice().reverse(); const card = x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
-          <div className="row"><span>{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div></div>;
+          <div className="row"><span className="ctitle">{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div><div className="tally"><span>✓ {x.yes ?? 0} yes · ✕ {x.no ?? 0} no</span><span>{x.yes ?? 0} / {dao.sputnik ? dao.need : dao.total_weight} needed</span></div></div>;
           return <>{all.slice(0, 5).map(card)}{all.length > 5 && <details className="older"><summary className="muted" style={{ cursor: "pointer", margin: "8px 0" }}>Older proposals ({all.length - 5})</summary>{all.slice(5).map(card)}</details>}</>; })()}
       </div>
       <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
           <Next>Tap “Create New Proposal” to start</Next>
+          {dao.sputnik && <div className="help" style={{ marginTop: 0 }}>Council members vote on every proposal here. In the demo DAO only council wallets vote.</div>}
           <h2>Summary</h2>
           {dao.sputnik ? <>{[["Name", dao.name], ["Sputnik DAO", <a key="a" href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">{dao.id} ↗</a>], ["Balance in NEAR", yocto(dao.treasury)],
             ["Votes needed", `${dao.need} of ${dao.total_weight} council`], ["AI executor", EXECUTOR], ["Your auto-approve tier", acct ? (tier ? `${yocto(tier.cap)} NEAR · reputation ${tier.rep}` : "…") : "connect wallet"]]
@@ -346,7 +356,7 @@ export default function Home() {
               ["Created", fmt(BigInt(p.deadline_ns) - BigInt(dao.voting_period_ns))], ["Voting Ends", fmt(p.deadline_ns)], ["Created by", p.proposer]]
               .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
           </div>
-          <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {goal} votes{dao.sputnik ? " needed" : ""}</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
+          <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {goal} votes{dao.sputnik ? " needed" : ""} · {p.no ?? 0} no</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
           {p.status === "Active" && (votes2.some(v => v[0] === acct) ? <div className="receipt">You voted. Waiting for others…</div> : <>
             <button className="btn p full big" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{phase === "wallet" ? "Waiting for wallet…" : phase === "confirm" ? "Confirming on NEAR…" : "Vote Yes"}</button>
             <button className="btn full" style={{ marginTop: 8 }} disabled={busy} onClick={() => voteNo(dao, p, myW || 1)}>Vote No</button></>)}
