@@ -98,7 +98,8 @@ cd ..
 cd agent && npm ci && pip install playwright && playwright install chromium
 mkdir -p ~/.lisdao && cp ../.env.example ~/.lisdao/agent.env   # then fill in values
 AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
-# NEAR AI Cloud as the agent's model: set LLM_PROVIDER=nearai and NEARAI_API_KEY (NEARAI_MODEL defaults to z-ai/glm-5.3-flash).
+# NEAR AI Cloud as the agent's model: set LLM_PROVIDER=nearai and NEARAI_API_KEY (NEARAI_MODEL defaults to x-ai/grok-4.7, recommended for live runs; z-ai/glm-5.3-flash is cheaper but misread one character of the deposit address in a live run, which the exact-match check refused).
+# If the LLM's address read doesn't exactly match #deposit-address, the agent asks it to re-read up to 2 more times; it never pays the DOM value unless the LLM's read equals it exactly.
 # Dry run (browser + LLM + #deposit-address check, no feed posts, no on-chain calls):
 #   LLM_PROVIDER=nearai NEARAI_API_KEY=... CHARITY_URL=https://lisdao.vercel.app/demo-charity python3 agent/browser_agent.py --dry-run
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
