@@ -25,7 +25,7 @@ const txHash = r => { const o = Array.isArray(r) ? r[r.length - 1] : r; return o
 const TX = h => `https://testnet.nearblocks.io/txns/${h}`;
 const short = a => a && a.length > 22 ? a.slice(0, 10) + "…" + a.slice(-8) : a;
 const badge = s => ({ Active: "Voting", Approved: "Passed", Executing: "Passed", Executed: "Passed", Escalated: "Voting", Rejected: "Rejected", Failed: "Rejected" }[s]);
-// Wallet selector + Meteor module. A session is live only when the selector has an account AND the Meteor SDK reports signed in.
+// Wallet selector with the standard modal (Meteor and other NEAR wallets). A session is live only when the selector has an account AND the wallet reports signed in.
 const SEL_KEYS = /^(near-wallet-selector|_meteor_wallet|meteor|near_app_wallet|selected-wallet)/;
 const resetWallet = () => { try { Object.keys(localStorage).filter(k => SEL_KEYS.test(k)).forEach(k => localStorage.removeItem(k)); } catch {} };
 const yocto = y => (Number(BigInt(y) / 10n ** 20n) / 1e4).toFixed(4);
@@ -108,20 +108,24 @@ export default function Home() {
       window.__txs = []; const fake = { wallet: async () => { if (q.get("e2e") === "dead") throw new Error("No accounts found"); return ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }); }, disconnect: async () => {} };
       setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); setWReady(true); return;
     }
-    const [{ setupWalletSelector, internalActionToNaj }, { setupMeteorWallet }] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/meteor-wallet")]);
-    const selector = await setupWalletSelector({ network: "testnet", modules: [setupMeteorWallet()] });
-    const getW = () => selector.wallet("meteor-wallet");
+    const [{ setupWalletSelector, internalActionToNaj }, { setupModal }, ...m] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/modal-ui"),
+      import("@near-wallet-selector/meteor-wallet"), import("@near-wallet-selector/my-near-wallet"), import("@near-wallet-selector/hot-wallet"), import("@near-wallet-selector/here-wallet"),
+      import("@near-wallet-selector/intear-wallet"), import("@near-wallet-selector/sender"), import("@near-wallet-selector/bitte-wallet"), import("@near-wallet-selector/near-mobile-wallet")]);
+    const [{ setupMeteorWallet }, { setupMyNearWallet }, { setupHotWallet }, { setupHereWallet }, { setupIntearWallet }, { setupSender }, { setupBitteWallet }, { setupNearMobileWallet }] = m;
+    const selector = await setupWalletSelector({ network: "testnet", modules: [setupMeteorWallet(), setupMyNearWallet(), setupHotWallet(), setupHereWallet(),
+      setupIntearWallet(), setupSender(), setupBitteWallet(), setupNearMobileWallet()] });
+    const getW = () => selector.wallet(); // whichever wallet the user picked in the modal
     const adapter = { // same shape the rest of the page uses: wallet(), disconnect()
-      wallet: async () => { const w = await getW(); if (!(await w.isSignedIn())) throw new Error("No accounts found");
+      wallet: async () => { const w = await getW(); if (!(await w.isSignedIn?.() ?? true)) throw new Error("No accounts found");
         return { signAndSendTransaction: t => w.signAndSendTransaction({ ...t, actions: t.actions.map(internalActionToNaj) }) }; },
       disconnect: async () => { try { await (await getW()).signOut(); } catch {} resetWallet(); } };
     const sync = st => { const id = st.accounts?.find(x => x.active)?.accountId || st.accounts?.[0]?.accountId; setAcct(id); if (id) setNeedRe(false); };
     selector.store.observable.subscribe(sync);
-    let wP = getW(); // resolve the module now so the click can open the popup without waiting
-    setSel(adapter); setModal({ show: () => { wP.then(w => w.signIn({ contractId: "lisdao-demo.sputnikv2.testnet", methodNames: [] }))
-      .then(() => { setNeedRe(false); sync(selector.store.getState()); }).catch(e => { console.warn("connect", e); wP = getW(); }); } });
+    const ui = setupModal(selector, { contractId: "lisdao-demo.sputnikv2.testnet", methodNames: [] });
+    setSel(adapter); setModal({ show: () => ui.show() });
     const st = selector.store.getState();
-    if (st.accounts?.length) { const w = await getW(); if (await w.isSignedIn()) sync(st); else { console.warn("wallet: persisted account without live Meteor session"); try { await w.signOut(); } catch {} resetWallet(); setAcct(undefined); setNeedRe(true); } }
+    if (st.accounts?.length) { try { const w = await getW(); if (await w.isSignedIn?.() ?? true) sync(st); else throw 0; }
+      catch { console.warn("wallet: persisted account without live session"); try { await (await getW()).signOut(); } catch {} resetWallet(); setAcct(undefined); setNeedRe(true); } }
     setWReady(true);
   })().catch(e => { console.error("wallet init", e); setWReady(true); }); }, []);
   useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
