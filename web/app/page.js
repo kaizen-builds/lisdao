@@ -46,19 +46,19 @@ function Agent({ dao, p, onClose }) {
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [ev.length]);
   const last = [...ev].reverse().find(e => e.shot); const done = ev.find(e => e.phase === "done");
   const failed = ev.find(e => e.phase === "failed");
-  return <div className="agent"><div className="chrome"><span /><span /><span /> LisDao agent · live browser{hb && <em style={{ marginLeft: "auto", fontStyle: "normal", fontSize: 12, color: hb.online ? "#16a34a" : "#9ca3af" }}>● {hb.online ? "agent online" : "agent offline"}</em>}</div>
+  return <div className="agent" role="dialog" aria-label="Agent live feed"><div className="chrome"><b>Agent · live browser</b>{hb && <span className={"dot" + (hb.online ? " on" : "")}>{hb.online ? "agent online" : "agent offline"}</span>}</div>
     <div className="screen" ref={box}>
       {last ? <img key={last.t} src={"data:image/jpeg;base64," + last.shot} alt="agent browser" className="shot fade" />
         : !done && <div className="sk" style={{ height: 220 }} />}
       {ev.length === 0 && p.status === "Executing" && <div className="step">{hb?.online ? (hb.state === "working" && hb.dao_id === fd && hb.proposal_id === fp ? "Agent picked it up · opening the browser…" : "Agent online · starting the task…") : hb ? "Agent is offline right now · it will pick this up as soon as it is back" : "Checking the agent…"}</div>}
-      {ev.map((e, i) => <div className="step" key={e.t + "" + i}>{e.phase === "done" ? "✅" : e.phase === "failed" ? "⚠️" : "✓"} {e.text}</div>)}
-      {!done && !failed && p.status === "Executing" && <div style={{ position: "relative", height: 40 }}><div className="ripple" style={{ left: 130, top: 10 }} /><div className="ripple b" style={{ left: 130, top: 10 }} /></div>}
+      {ev.map((e, i) => <div className={"step" + (e.phase === "failed" ? " bad" : "")} key={e.t + "" + i}>{e.phase === "failed" ? "⚠ " : "✓ "}{e.text}</div>)}
+      {!done && !failed && p.status === "Executing" && <div className="step"><span className="pulse" /> Working…</div>}
       {(done || p.status === "Executed" || p.status === "Escalated") && <div className="receipt"><b>{p.status === "Escalated" || done?.escalated ? "Above the auto-approve tier · sent to the council as a Sputnik Transfer proposal" : dao.sputnik ? "Reported on-chain · paid by the LisDao executor from the DAO’s escrow" : "Reported on-chain · paid by the DAO contract"}</b>
-        {done?.address && <div style={{ marginTop: 6, overflowWrap: "anywhere" }}>To: {done.address}</div>}
-        {done?.tx && <div style={{ marginTop: 6 }}><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank">Agent payout tx ↗</a></div>}
-        {p.result && <div style={{ marginTop: 6, fontSize: 12 }}>{p.result}</div>}</div>}
+        {done?.address && <div>To: {done.address}</div>}
+        {done?.tx && <div><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank" rel="noopener noreferrer">Agent payout tx ↗</a></div>}
+        {p.result && <div className="small">{p.result}</div>}</div>}
     </div>
-    <div style={{ padding: 10 }}><button className="btn full" onClick={onClose}>Close</button></div></div>;
+    <div className="pad"><button className="btn full" onClick={onClose}>Close</button></div></div>;
 }
 
 const STAGES = ["Demo", "Proposal", "Vote", "Agent", "Paid"];
@@ -66,7 +66,7 @@ function Stepper({ at }) {
   return <div className="stepper" aria-label="Progress">{STAGES.map((n, i) =>
     <div key={n} className={"st" + (i < at || at >= STAGES.length ? " done" : "") + (i === Math.min(at, STAGES.length - 1) ? " now" : "")}><span>{i < at ? "✓" : i + 1}</span><em>{n}</em></div>)}</div>;
 }
-const Next = ({ children }) => <div className="next fade">→ {children}</div>;
+const Next = ({ children }) => <p className="next fade" role="status">{children}</p>;
 
 export default function Home() {
   const [sel, setSel] = useState(); const [modal, setModal] = useState(); const [acct, setAcct] = useState(); const [needRe, setNeedRe] = useState(false);
@@ -176,75 +176,66 @@ export default function Home() {
   }
   const dao = isSputnik(cur) ? (sdao?.id === cur ? sdao : null) : daos.find(d => d.id === cur); const p = props.find(x => x.id === pid);
 
-  const wallet = <div className="navw" style={{ position: "relative" }}>{acct
-      ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
-      : !wReady ? <button className="btn" disabled aria-busy="true">👛 …</button>
-      : <button className="btn" onClick={() => modal?.show()}>👛 {needRe ? "Reconnect wallet" : "Connect wallet"}</button>}
-      {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
-        <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div>;
-  const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>{wallet}</div>;
+  const wallet = <div className="navw">{acct
+      ? <button className="btn" aria-expanded={menu} onClick={() => setMenu(!menu)}>{short(acct)} ▾</button>
+      : !wReady ? <button className="btn" disabled aria-busy="true">Wallet…</button>
+      : <button className="btn" onClick={() => modal?.show()}>{needRe ? "Reconnect wallet" : "Connect wallet"}</button>}
+      {menu && <div className="menu">
+        <button className="btn" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div>;
+  const GH = "https://github.com/kaizen-builds/lisdao";
+  const ext = { target: "_blank", rel: "noopener noreferrer" };
+  const nav = <header className="nav"><div className="nav-in">
+    <button className="brand" onClick={() => { setCur(null); setPane("summary"); }} aria-label="LisDao home"><Drop size={24} /><Wordmark /></button>
+    <a className="navlink" href={GH} {...ext}>GitHub</a>{wallet}</div></header>;
+  const foot = <footer className="foot">Built at NEAR HACKATHON · Testnet only · <a href={GH} {...ext}>GitHub (MIT)</a></footer>;
 
   const NB = "https://testnet.nearblocks.io";
-  if (cur === null && pane !== "create-dao") return <div className="lp">
-    <header className="lnav"><div className="lnav-in">
-      <a className="lbrand" href="#top" aria-label="LisDao home"><Wordmark size={17} /></a>
-      <nav className="llinks" aria-label="Sections"><a href="#how">How it works</a><a href="#limits">Limits</a><a href="#proof">Proof</a></nav>
-      <div className="lright">{wallet}<a className="lgh" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">GitHub</a></div></div></header>
-    <main className="lmain fade" id="top">
+  if (cur === null && pane !== "create-dao") return <div className="lp">{nav}
+    <main className="main fade" id="top">
     <section className="lhero" aria-labelledby="hero-title">
-      <Drop size={44} />
+      <Drop size={56} />
       <h1 id="hero-title">Your DAO votes.<br />An AI agent does the work.</h1>
-      <p className="lsub">Community members vote on a task in plain words, in a Sputnik DAO. When the vote passes, an AI agent does it in a real browser, and a NEAR contract pays within the limits your DAO sets.</p>
-      <div className="lcta"><button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button></div>
-      <p className="lline">Testnet only. No real money.</p>
-      <button className="link ladv" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
-      {adv && <div className="ladvbox"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
+      <p className="lsub">Members vote on a task in plain words. The agent does it in a real browser. A NEAR contract pays, within limits.</p>
+      <button className="btn p big" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button>
+      <p className="note">Testnet only. No real money.</p>
+      <button className="link" aria-expanded={adv} onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
+      {adv && <div className="stack"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
       <button className="btn full" onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></div>}
     </section>
-    <div className="lbuilt" aria-label="Built on"><span>Built on:</span> <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b> (agent model)</div>
+    <p className="pill" aria-label="Built on">Built on <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b></p>
 
-    <section className="lsec" id="how" aria-labelledby="how-title"><h2 id="how-title" className="sr">How it works</h2><div className="lgrid3">
-      <div className="lcard"><VoteArt /><p className="lnum">1</p><h3>The community votes</h3><p>Members vote on a task in plain words, in a standard Sputnik DAO. In the demo DAO only council wallets vote.</p></div>
-      <div className="lcard"><WorkArt /><p className="lnum">2</p><h3>The agent works</h3><p>It opens a real browser and does the task. You watch every step live.</p></div>
-      <div className="lcard"><PayArt /><p className="lnum">3</p><h3>The contract pays</h3><p>Small payouts go through. Bigger ones go back to a vote.</p></div></div>
-      <p className="ltrust">The agent can't vote and can't take the treasury. Check it on NEAR testnet: <a href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer">the DAO</a>, <a href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer">the contract</a>, <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">a payout</a>.</p></section>
+    <section className="sec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><ol className="steps">
+      <li className="box"><VoteArt /><span className="num">1</span><h3>The community votes</h3><p>A task is a normal Sputnik DAO proposal. In the demo DAO only council wallets vote.</p></li>
+      <li className="box"><WorkArt /><span className="num">2</span><h3>The agent works</h3><p>It opens a real browser and does the task. You watch each step.</p></li>
+      <li className="box"><PayArt /><span className="num">3</span><h3>The contract pays</h3><p>Small payouts go through. Big ones go back to a vote.</p></li></ol></section>
 
-    <section className="lsec" aria-labelledby="run-title"><h2 id="run-title">An example run: proposal #9</h2><p className="lmuted">The live demo agent's model runs on NEAR AI Cloud.</p><div className="lgrid2">
-      <div className="lcard lvote" aria-label="The vote"><p className="lsmall">Step 1 · Sputnik DAO vote</p><h3>“Donate 0.1 NEAR to the water project”</h3>
-        <div className="lvrow"><span className="badge Passed">Passed</span><span className="lsmall">1 of 1 vote needed</span></div>
+    <section className="sec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">Proof: proposal #9</h2>
+      <div className="box proof"><p className="q">“Donate 0.1 NEAR to the water project”</p>
+        <div className="row"><span className="badge Passed">Passed</span><span className="muted">Yes 1 · No 0</span></div>
         <div className="bar"><i style={{ width: "100%" }} /></div>
-        <div className="lvbtns"><span className="lyes">✓ Yes · 1</span><span className="lno">No · 0</span></div>
-        <p className="lsmall">In the demo DAO only council wallets vote.</p>
-        <a href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} target="_blank" rel="noopener noreferrer">See the vote on NearBlocks ↗</a></div>
-      <div className="lcard lrun" aria-label="Example run"><p className="lsmall">Steps 2 and 3 · agent on NEAR AI Cloud</p><h3>Then the agent works and the contract pays</h3>
-        <ol><li><b>2</b>Agent opens a browser and works, step by step</li><li><b>3</b>Contract pays 0.1 NEAR from escrow</li></ol>
-        <a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer">See the payout on NearBlocks ↗</a></div></div></section>
+        <p className="muted">The agent's model ran on NEAR AI Cloud. The contract paid 0.1 NEAR from escrow.</p>
+        <div className="links"><a href={`${NB}/txns/BLWit74iq8u1BUJ4QMdHacmt73hZeyc9rzWAGHxaQJYd`} {...ext}>Proposal ↗</a><a href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} {...ext}>Vote ↗</a><a href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} {...ext}>Payout ↗</a></div>
+      </div>
+      <p className="muted small">More on-chain evidence is in the <a href={`${GH}#readme`} {...ext}>README</a>.</p></section>
 
-    <section className="lsec" id="limits" aria-labelledby="lim-title"><h2 id="lim-title">Limits you can check</h2><p className="lmuted">The rules live in a contract, not in a prompt.</p><div className="lgrid3">
-      <div className="lcard warm"><h3>The agent can't vote</h3><p>In the demo DAO only council wallets vote. A task starts only when the DAO's own proposal passes.</p></div>
-      <div className="lcard warm"><h3>The agent can't take the treasury</h3><p>Only the agent's account can report a payout, and never above the voted cap. The money sits in escrow, not with the agent.</p></div>
-      <div className="lcard warm"><h3>Big payouts go back to a vote</h3><p>Auto-pay starts at 0.2 NEAR per proposer, grows 0.1 per finished task, and stops at 1 NEAR. Above that, the council votes again.</p></div></div>
-      <div className="lcard lnot"><h3>What it doesn't do yet</h3><p>Testnet only, with no real money. One agent account run by one operator. The agent reads the payout address off the page, and the contract trusts it within the cap. There is no timeout refund yet. One live run (proposal #8) failed safely when a cheaper model misread one character of the address; the exact-match check refused to pay. The agent is built for one demo flow, and the charity is a demo page.</p></div></section>
+    <section className="sec" id="limits" aria-labelledby="lim-title"><h2 id="lim-title">Limits</h2><div className="two">
+      <div className="box"><h3>What the contract enforces</h3><ul>
+        <li>The agent can't vote.</li><li>The agent can't take the treasury. Money waits in escrow.</li>
+        <li>Auto-pay starts at 0.2 NEAR and caps at 1 NEAR. Bigger payouts go back to a vote.</li></ul></div>
+      <div className="box"><h3>What it doesn't do yet</h3><ul>
+        <li>Testnet only. One agent run by one operator.</li><li>The contract trusts the payee the agent reports, within the cap.</li>
+        <li>No timeout refund yet.</li></ul></div></div></section>
 
-    <section className="lsec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">On-chain proof</h2><p className="lmuted">Everything is on NEAR testnet. Check it yourself.</p><div className="lgrid4">
-      <a className="lcard lp1" href={`${NB}/address/lisdao-demo.sputnikv2.testnet`} target="_blank" rel="noopener noreferrer"><h3>Sputnik DAO</h3><p>lisdao-demo.sputnikv2.testnet ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/address/exec.lisdao-v2-1793741346.testnet`} target="_blank" rel="noopener noreferrer"><h3>Executor contract</h3><p>exec.lisdao-v2-1793741346.testnet ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/BLWit74iq8u1BUJ4QMdHacmt73hZeyc9rzWAGHxaQJYd`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 created</h3><p>Plain-words task in Sputnik DAO ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/2X3LdXx4xd8U85g3AsrTtGTXRCXdC8Zfy7fmZydbcEi2`} target="_blank" rel="noopener noreferrer"><h3>Proposal #9 vote</h3><p>Council votes yes, task dispatched ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/BFijitUnuteeT7KP3VzhPt4eDMuQkKk56msMtQppEMH4`} target="_blank" rel="noopener noreferrer"><h3>A NEAR AI payout</h3><p>Proposal #9: agent on NEAR AI Cloud, contract sends 0.1 NEAR ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF`} target="_blank" rel="noopener noreferrer"><h3>Earlier payout</h3><p>Contract sends 0.1 NEAR (proposal #6) ↗</p></a>
-      <a className="lcard lp1" href={`${NB}/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u`} target="_blank" rel="noopener noreferrer"><h3>A blocked call</h3><p>Non-agent account fails with “only agent” ↗</p></a></div></section>
-
-    <section className="ldark" aria-labelledby="cta-title"><h2 id="cta-title">Create a proposal. Vote yes. Watch the agent.</h2><p>It takes about a minute on testnet.</p>
-      <button className="lbtn" onClick={() => open(DEMO_SPUTNIK)}>Open the demo</button></section>
+    <section className="cta" aria-labelledby="cta-title"><h2 id="cta-title">Create a task. Vote yes. Watch the agent.</h2>
+      <button className="btn p big" onClick={() => open(DEMO_SPUTNIK)}>Open the demo</button></section>
     </main>
-    <footer className="lfoot">Built at NEAR HACKATHON · <a href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">MIT license</a></footer>
-    {toast && <div className="toast">{toast}</div>}</div>;
+    {foot}
+    {toast && <div className="toast" role="status">{toast}</div>}</div>;
 
-  if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
+  if (pane === "create-dao") return <>{nav}<main className="narrow fade"><div className="panel">
     <h2>Create New DAO</h2>
     <div className="muted">Creates a real Sputnik DAO on NEAR testnet. Sputnik needs about 6 NEAR to store the DAO; the rest becomes its treasury.</div>
-    <label style={{ display: "block", marginTop: 14 }}>DAO name</label><input placeholder="my-club" value={f.name} onChange={e => setF({ ...f, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} />
+    <label>DAO name</label><input placeholder="my-club" value={f.name} onChange={e => setF({ ...f, name: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-") })} />
     <div className="help">Your DAO's address will be <b>{(f.name.trim().replace(/^-+|-+$/g, "") || "name")}.sputnikv2.testnet</b></div>
     <label>Council members</label><input placeholder="alice.testnet, bob.testnet" value={f.members} onChange={e => setF({ ...f, members: e.target.value })} />
     <div className="help">Members who can vote. You are added automatically. Add friends' testnet accounts, e.g. alice.testnet</div>
@@ -262,48 +253,49 @@ export default function Home() {
         default_vote_policy: { weight_kind: "RoleWeight", quorum: "0", threshold: [a, b] }, proposal_bond: "10000000000000000000000", proposal_period: "604800000000000", bounty_bond: "100000000000000000000000", bounty_forgiveness_period: "604800000000000" };
       const args = btoa(JSON.stringify({ config: { name: nm, purpose: "LisDao: council votes, AI agent executes tasks", metadata: "" }, policy }));
       if (await call("create", { name: nm, args }, toYocto(f.dep ?? "6.5"), FACTORY, "300000000000000")) { flash("Sputnik DAO created"); setTimeout(() => open(nm + "." + FACTORY), 1500); } }}>{busy ? "Creating..." : "Create Sputnik DAO"}</button>
-    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { setPane("summary"); }}>← Back</button></div></div>{toast && <div className="toast">{toast}</div>}</>;
+    <button className="btn full" onClick={() => { setPane("summary"); }}>← Back</button></div></main>{foot}{toast && <div className="toast" role="status">{toast}</div>}</>;
 
-  if (!dao) return <>{nav}<div className="grid"><div className="panel">{[0, 1, 2].map(i => <div key={i} className="sk big" />)}</div>
-    <div className="panel">{[0, 1, 2, 3, 4, 5].map(i => <div key={i} className="sk" />)}</div></div>{toast && <div className="toast">{toast}</div>}</>;
+  if (!dao) return <>{nav}<div className="grid" aria-busy="true"><div className="panel">{[0, 1, 2].map(i => <div key={i} className="sk big" />)}</div>
+    <div className="panel"><p className="muted">Loading the DAO from NEAR testnet…</p>{[0, 1, 2, 3].map(i => <div key={i} className="sk" />)}</div></div>{toast && <div className="toast" role="status">{toast}</div>}</>;
   const votes2 = dao.sputnik ? (p?.votes || []) : votes;
   const used = votes2.length ? votes2.reduce((s, [a]) => s + (dao.members.find(m => m[0] === a)?.[1] || 0), 0) : 0;
   const myW = dao.members.find(m => m[0] === acct)?.[1] || 0; const goal = dao.sputnik ? dao.need : dao.total_weight;
   const pct = p ? Math.min(100, Math.round(100 * p.yes / (dao.sputnik ? dao.need : dao.total_weight))) : 0;
   const stage = pane === "create" ? 1 : pane === "proposal" && p ? ({ Active: 2, Approved: 2, Executing: 3, Executed: 5, Escalated: 4, Failed: 3, Rejected: 2 }[p.status] ?? 2) : 0;
 
-  return <>{nav}{toast && <div className="toast">{toast}</div>}{agent && p && <Agent dao={dao} p={p} onClose={() => { setAgent(false); setDismissed(pid); }} />}
+  return <>{nav}{toast && <div className="toast" role="status">{toast}</div>}{agent && p && <Agent dao={dao} p={p} onClose={() => { setAgent(false); setDismissed(pid); }} />}
     <div className="wrap"><Stepper at={stage} /></div>
     <div className="grid">
       <div className="panel">
-        <button className="link" style={{ padding: 0, marginBottom: 6 }} onClick={() => { setCur(null); setPane("summary"); }}>← Home</button>
-        <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(isSputnik(e.target.value) ? e.target.value : +e.target.value)} aria-label="Switch DAO">
+        <button className="link back" onClick={() => { setCur(null); setPane("summary"); }}>← Home</button>
+        <div className="row"><h2>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(isSputnik(e.target.value) ? e.target.value : +e.target.value)} aria-label="Switch DAO">
           <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}</select></div>
-        <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
-        <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>DAO summary</div>
+        <button className="btn p full" onClick={() => setPane("create")}>Create New Proposal</button>
+        <h3 className="lh">Proposals</h3>
+        <div className={"card" + (pane === "summary" ? " on" : "")} role="button" tabIndex={0} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.currentTarget.click())} onClick={() => setPane("summary")}>DAO summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
-        {(() => { const all = props.slice().reverse(); const card = x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
+        {(() => { const all = props.slice().reverse(); const card = x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} role="button" tabIndex={0} onKeyDown={e => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), e.currentTarget.click())} onClick={() => showP(dao.id, x.id)}>
           <div className="row"><span className="ctitle">{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div><div className="tally"><span>✓ {x.yes ?? 0} yes · ✕ {x.no ?? 0} no</span><span>{x.yes ?? 0} / {dao.sputnik ? dao.need : dao.total_weight} needed</span></div></div>;
-          return <>{all.slice(0, 5).map(card)}{all.length > 5 && <details className="older"><summary className="muted" style={{ cursor: "pointer", margin: "8px 0" }}>Older proposals ({all.length - 5})</summary>{all.slice(5).map(card)}</details>}</>; })()}
+          return <>{all.slice(0, 5).map(card)}{all.length > 5 && <details className="older"><summary>Older proposals ({all.length - 5})</summary>{all.slice(5).map(card)}</details>}</>; })()}
       </div>
       <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
           <Next>Tap “Create New Proposal” to start</Next>
           {dao.sputnik && <div className="help" style={{ marginTop: 0 }}>Council members vote on every proposal here. In the demo DAO only council wallets vote.</div>}
           <h2>Summary</h2>
-          {dao.sputnik ? <>{[["Name", dao.name], ["Sputnik DAO", <a key="a" href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">{dao.id} ↗</a>], ["Balance in NEAR", yocto(dao.treasury)],
+          {dao.sputnik ? <>{[["Name", dao.name], ["Sputnik DAO", <a key="a" href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank" rel="noopener noreferrer">{dao.id} ↗</a>], ["Balance in NEAR", yocto(dao.treasury)],
             ["Votes needed", `${dao.need} of ${dao.total_weight} council`], ["AI executor", EXECUTOR], ["Your auto-approve tier", acct ? (tier ? `${yocto(tier.cap)} NEAR · reputation ${tier.rep}` : "…") : "connect wallet"]]
             .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
-            <div className="muted" style={{ marginTop: 8 }}>Money and votes stay in the Sputnik DAO. When a task passes, the DAO escrows its spending cap with the LisDao executor. Payouts within your tier are paid at once; bigger ones go back to the council as a normal Sputnik Transfer proposal. Each finished task raises your tier.</div></>
+            <p className="muted small">Money and votes stay in the Sputnik DAO. A passed task escrows its cap with the executor. Payouts within your tier are paid at once; bigger ones go back to a council vote.</p></>
           : [["Name", dao.name], ["Created At", "DAO #" + dao.id + " on NEAR testnet"], ["Creator Account", dao.owner], ["Balance in NEAR", yocto(dao.treasury)], ["Agent", dao.agent], ["Quorum", dao.quorum_pct + "%"]]
             .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
-          <button className="link" style={{ marginTop: 12 }} disabled={busy} onClick={() => { const n = prompt("Deposit how much NEAR into the treasury?", "1"); if (n && +n > 0) (dao.sputnik ? call("$transfer", {}, toYocto(n), dao.id) : call("deposit", { dao_id: dao.id }, toYocto(n))).then(ok => ok && flash("Deposit sent")); }}>Fund treasury</button>
-          <h3 style={{ marginTop: 28 }}>{dao.sputnik ? "Council" : "Members"}</h3>
+          <button className="link" disabled={busy} onClick={() => { const n = prompt("Deposit how much NEAR into the treasury?", "1"); if (n && +n > 0) (dao.sputnik ? call("$transfer", {}, toYocto(n), dao.id) : call("deposit", { dao_id: dao.id }, toYocto(n))).then(ok => ok && flash("Deposit sent")); }}>Fund treasury</button>
+          <h3 className="lh">{dao.sputnik ? "Council" : "Members"}</h3>
           <div className="muted">Your votes: {myW} out of {dao.total_weight}</div>
-          <table style={{ marginTop: 10 }}><thead><tr><th>WALLET ADDRESS</th><th>VOTES</th></tr></thead><tbody>
+          <div className="tbl"><table><thead><tr><th>WALLET ADDRESS</th><th>VOTES</th></tr></thead><tbody>
             {dao.members.map(([a, w]) => <tr key={a}><td>{a}</td><td>{w} ({Math.round(100 * w / dao.total_weight)}%)</td>
 </tr>)}
-          </tbody></table></>}
+          </tbody></table></div></>}
         {pane === "create" && <>
           <div className="row"><h2>Create Proposal</h2></div>
           <Next>Describe the task in plain English, then create it</Next>
@@ -344,28 +336,28 @@ export default function Home() {
               else if (dao.sputnik) { const ok = await viewAt(dao.id, "get_proposal", { id }).catch(() => null); if (!ok) return setErr("The transaction went through but no proposal appeared on-chain"); await loadS(dao.id); }
               flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{phase === "wallet" ? "Waiting for wallet…" : phase === "confirm" ? "Confirming on NEAR…" : busy ? "Checking…" : "Submit proposal"}</button></>}
         {pane === "proposal" && p && <>
-          <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1></div>
+          <h1 className="ptitle">{p.title}</h1>
           {p.status === "Escalated" && <Next>Above the auto-approve tier. Council: vote on the new Transfer proposal</Next>}
           {p.status === "Active" && <Next>{votes2.some(v => v[0] === acct) ? "Waiting for more Yes votes" : "Vote Yes to send it to the agent"}</Next>}
           {p.status === "Executing" && <Next><span className="pulse" /> The agent is working…</Next>}
           {p.status === "Executed" && <Next>Done. The DAO paid on-chain {p.result && <span className="muted"> · see receipt below</span>}</Next>}
           {p.status === "Approved" && <Next>Passed. Execute the transfer</Next>}
           <p className="muted">{p.action.AgentTask ? `${p.action.AgentTask.instructions} · cap ${yocto(p.action.AgentTask.max_spend)} NEAR` : p.action.Other ? `Sputnik ${p.action.Other} proposal` : `${p.escalatedFrom ? "Escalated by the AI executor · " : ""}Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
-          <div className="panel" style={{ background: "#FFFBF7", boxShadow: "none", border: "1px solid var(--line)" }}>
+          <div className="facts">
             {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing in browser" : p.status === "Executed" ? "Passed · Executed" : p.status === "Escalated" ? "Passed · payout sent to council vote" : p.status],
               ["Created", fmt(BigInt(p.deadline_ns) - BigInt(dao.voting_period_ns))], ["Voting Ends", fmt(p.deadline_ns)], ["Created by", p.proposer]]
               .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
           </div>
-          <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {goal} votes{dao.sputnik ? " needed" : ""} · {p.no ?? 0} no</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
+          <div className="tallybox"><div className="row"><b>Progress: {p.yes} / {goal} votes{dao.sputnik ? " needed" : ""}</b><span className="muted">{p.no ?? 0} no · {pct}%</span></div><div className="bar"><i style={{ width: pct + "%" }} /></div></div>
           {p.status === "Active" && (votes2.some(v => v[0] === acct) ? <div className="receipt">You voted. Waiting for others…</div> : <>
             <button className="btn p full big" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{phase === "wallet" ? "Waiting for wallet…" : phase === "confirm" ? "Confirming on NEAR…" : "Vote Yes"}</button>
-            <button className="btn full" style={{ marginTop: 8 }} disabled={busy} onClick={() => voteNo(dao, p, myW || 1)}>Vote No</button></>)}
+            <button className="btn full" disabled={busy} onClick={() => voteNo(dao, p, myW || 1)}>Vote No</button></>)}
           {err && <div className="warn" role="alert">{err}</div>}
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
           {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && !agent && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>View Agent Execution</button>}
-          <div className="muted" style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank">{lastKind === "add_proposal" ? "Proposal created tx ↗" : lastKind === "act_proposal" ? "Vote tx ↗" : "Transaction ↗"}</a>}
-            {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">Proposal #{p.id} on the DAO ↗</a>}</div>
-          {p.result && <div className="receipt" style={{ marginTop: 14 }}><b>Agent report (on-chain):</b> {p.result}</div>}
+          <div className="links">{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank" rel="noopener noreferrer">{lastKind === "add_proposal" ? "Proposal created tx ↗" : lastKind === "act_proposal" ? "Vote tx ↗" : "Transaction ↗"}</a>}
+            {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank" rel="noopener noreferrer">Proposal #{p.id} on the DAO ↗</a>}</div>
+          {p.result && <div className="receipt"><b>Agent report (on-chain):</b> {p.result}</div>}
         </>}
-      </div></div></>;
+      </div></div>{foot}</>;
 }

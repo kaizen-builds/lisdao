@@ -15,7 +15,7 @@ with sync_playwright() as p:
     # ---- landing + wallet ----
     m=page("?e2e=out")
     btns=[x.inner_text() for x in m.locator(".lhero button").all()]; ok("Landing buttons", btns==["Try the demo","Advanced ▾"], str(btns))
-    ok("Landing says built on Sputnik DAO", "Built on: NEAR · Sputnik DAO · NEAR AI Cloud" in m.inner_text("body"))
+    ok("Landing says built on Sputnik DAO", "Built on NEAR · Sputnik DAO · NEAR AI Cloud" in m.inner_text("body"))
     m.click("text=Connect wallet"); m.wait_for_timeout(300); ok("Connect wallet", m.evaluate("!!window.__connectClicked") and "e2e-user" in m.inner_text(".navw"))
     m.click(".navw .btn"); m.click("text=Sign out"); m.wait_for_timeout(300); ok("Sign out", "Connect wallet" in m.inner_text(".navw"))
     # ---- create Sputnik DAO ----
