@@ -18,7 +18,11 @@ AGENT = E("AGENT_ID", "lisdao-agent-1793741346.testnet")
 WEB = E("WEB_URL", "http://localhost:3000")
 CHARITY = E("CHARITY_URL", WEB + "/demo-charity")
 FEED = E("FEED_URL", WEB + "/api/agent")
-RPCS = [E("NEAR_RPC", "https://test.rpc.fastnear.com"), "https://rpc.testnet.near.org"]
+RPCS = [E("NEAR_RPC", "https://test.rpc.fastnear.com"), E("NEAR_RPC_BACKUP", "https://rpc.testnet.near.org")]
+RPC_TIMEOUTS = [2, 5]  # short timeout on the fast RPC, then the backup
+POLL = float(E("POLL_SECONDS", "0.7"))
+HEARTBEAT = E("HEARTBEAT_URL", WEB + "/api/heartbeat")
+STATE = {"state": "idle", "dao_id": None, "proposal_id": None, "last_poll": 0, "last_poll_ms": 0, "polls": 0}
 LLM_URL = E("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
 LLM_KEY = E("LLM_API_KEY") or E("NEAR_AI_API_KEY") or E("GEMINI_API_KEY")
 LLM_MODEL = E("LLM_MODEL", "gemini-3.1-flash-lite")
@@ -34,13 +38,15 @@ def post(url, body, headers={}, timeout=60):
 
 def view(method, args):
     for i, rpc in enumerate(RPCS):
-        try: return _view(rpc, method, args)
-        except Exception:
+        try: return _view(rpc, method, args, RPC_TIMEOUTS[min(i, len(RPC_TIMEOUTS) - 1)])
+        except Exception as e:
+            print(f"  rpc {rpc} failed: {str(e)[:100]}", flush=True)
             if i == len(RPCS) - 1: raise
 
-def _view(RPC, method, args):
+def _view(RPC, method, args, timeout):
     r = post(RPC, {"jsonrpc": "2.0", "id": 1, "method": "query", "params": {"request_type": "call_function", "finality": "optimistic",
-        "account_id": CONTRACT, "method_name": method, "args_base64": base64.b64encode(json.dumps(args).encode()).decode()}})
+        "account_id": CONTRACT, "method_name": method, "args_base64": base64.b64encode(json.dumps(args).encode()).decode()}}, timeout=timeout)
+    if "error" in r or "error" in r.get("result", {}): raise RuntimeError(str(r)[:200])
     return json.loads(bytes(r["result"]["result"]))
 
 def feed(dao, pid, text, shot=None, **kw):
@@ -55,7 +61,7 @@ def _feed(dao, pid, text, shot, kw):
 def call(method, args):
     out = subprocess.run(["near", "contract", "call-function", "as-transaction", CONTRACT, method, "json-args", json.dumps(args),
         "prepaid-gas", "100 Tgas", "attached-deposit", "0 NEAR", "sign-as", AGENT, "network-config", "testnet",
-        "sign-with-legacy-keychain", "send"], capture_output=True, text=True)
+        "sign-with-legacy-keychain", "send"], capture_output=True, text=True, timeout=90)
     txt = out.stdout + out.stderr
     m = re.search(r"Transaction ID:\s*([1-9A-HJ-NP-Za-km-z]{43,44})", txt) or re.search(r"/txns/([1-9A-HJ-NP-Za-km-z]{43,44})", txt)
     if out.returncode != 0 or "Error" in txt and not m: raise RuntimeError(txt[-800:])
@@ -120,7 +126,7 @@ def ocr_text(page, sel=None):
     except Exception as e: return ""
 
 def run_task(dao, prop):
-    T0["t"] = time.time(); pid = prop["id"]; task = prop["action"]["AgentTask"]; goal = task["instructions"]
+    T0["t"] = time.time(); pid = prop["id"]; STATE.update(state="working", dao_id=dao, proposal_id=pid); beat(); task = prop["action"]["AgentTask"]; goal = task["instructions"]
     cap = int(task["max_spend"]); m = re.search(r"([\d.]+)\s*NEAR", goal, re.I)
     amount_near = m.group(1) if m else str(cap / 1e24)
     yocto = int(round(float(amount_near) * 1e6)) * 10**18
@@ -177,13 +183,35 @@ def run_task(dao, prop):
     feed(dao, pid, f"Done in {time.time() - T0['t']:.0f}s. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
     time.sleep(1)
 
+def beat():
+    def go():
+        try: post(HEARTBEAT, {k: STATE[k] for k in ("state", "dao_id", "proposal_id")} | {"model": LLM_MODEL}, {"x-agent-token": E("AGENT_FEED_TOKEN", "")}, 5)
+        except Exception as e: print("  heartbeat error:", str(e)[:100], flush=True)
+    threading.Thread(target=go, daemon=True).start()
+
+def heartbeat_loop():
+    n = 0
+    while True:
+        beat(); n += 1
+        if n % 12 == 0:  # log line every ~60s
+            age = time.time() - STATE["last_poll"]
+            print(f"{time.strftime('%H:%M:%S')} heartbeat · {STATE['state']} · {STATE['polls']} polls · last poll {age:.1f}s ago ({STATE['last_poll_ms']}ms)", flush=True)
+        time.sleep(5)
+
 def main():
-    print(f"LisDao agent {AGENT} watching {CONTRACT}", flush=True)
+    print(f"{time.strftime('%H:%M:%S')} LisDao agent {AGENT} watching {CONTRACT} · poll {POLL}s · LLM {LLM_MODEL} @ {LLM_URL}", flush=True)
+    threading.Thread(target=heartbeat_loop, daemon=True).start()
     while True:
         try:
-            for dao, prop in view("pending_tasks", {"agent": AGENT}): run_task(dao, prop)
+            t = time.time(); tasks = view("pending_tasks", {"agent": AGENT})
+            STATE.update(last_poll=time.time(), last_poll_ms=int((time.time() - t) * 1000), polls=STATE["polls"] + 1)
+            for dao, prop in tasks:
+                print(f"{time.strftime('%H:%M:%S')} picked up {dao}/{prop['id']} (poll {STATE['last_poll_ms']}ms)", flush=True)
+                try: run_task(dao, prop)
+                except Exception as e: print("task error:", e, flush=True); time.sleep(5)
+                finally: STATE.update(state="idle", dao_id=None, proposal_id=None); beat()
         except Exception as e: print("tick error:", e, flush=True)
         if E("ONCE"): break
-        time.sleep(1.5)
+        time.sleep(POLL)
 
 if __name__ == "__main__": main()

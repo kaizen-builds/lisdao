@@ -27,7 +27,9 @@ const fmt = ns => new Date(Number(BigInt(ns) / 1000000n)).toLocaleString();
 function toYocto(n) { const [i, f = ""] = String(n).split("."); return (BigInt(i || 0) * 10n ** 24n + BigInt((f + "0".repeat(24)).slice(0, 24))).toString(); }
 
 function Agent({ dao, p, onClose }) {
-  const [ev, setEv] = useState([]);
+  const [ev, setEv] = useState([]); const [hb, setHb] = useState(null);
+  useEffect(() => { let on = true; const h = async () => { try { const r = await (await fetch("/api/heartbeat", { cache: "no-store" })).json(); if (on) setHb(r); } catch {} };
+    h(); const t = setInterval(h, 3000); return () => { on = false; clearInterval(t); }; }, []);
   useEffect(() => { let on = true, since = 0;
     const tick = async () => { try { const r = await (await fetch(`/api/agent?dao=${dao.id}&pid=${p.id}&since=${since}`)).json();
       if (r.length && on) { since = r[r.length - 1].t; setEv(e => (r.some(x => x.reset) ? r : [...e, ...r])); } } catch {} };
@@ -36,11 +38,11 @@ function Agent({ dao, p, onClose }) {
   useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [ev.length]);
   const last = [...ev].reverse().find(e => e.shot); const done = ev.find(e => e.phase === "done");
   const failed = ev.find(e => e.phase === "failed");
-  return <div className="agent"><div className="chrome"><span /><span /><span /> LisDao agent · live browser</div>
+  return <div className="agent"><div className="chrome"><span /><span /><span /> LisDao agent · live browser{hb && <em style={{ marginLeft: "auto", fontStyle: "normal", fontSize: 12, color: hb.online ? "#16a34a" : "#9ca3af" }}>● {hb.online ? "agent online" : "agent offline"}</em>}</div>
     <div className="screen" ref={box}>
       {last ? <img key={last.t} src={"data:image/jpeg;base64," + last.shot} alt="agent browser" className="shot fade" />
         : !done && <div className="sk" style={{ height: 220 }} />}
-      {ev.length === 0 && p.status === "Executing" && <div className="step">Waiting for the agent to pick up the task…</div>}
+      {ev.length === 0 && p.status === "Executing" && <div className="step">{hb?.online ? (hb.state === "working" && hb.dao_id === dao.id && hb.proposal_id === p.id ? "Agent picked it up · opening the browser…" : "Agent online · starting the task…") : hb ? "Agent is offline right now · it will pick this up as soon as it is back" : "Checking the agent…"}</div>}
       {ev.map((e, i) => <div className="step" key={e.t + "" + i}>{e.phase === "done" ? "✅" : e.phase === "failed" ? "⚠️" : "✓"} {e.text}</div>)}
       {!done && !failed && p.status === "Executing" && <div style={{ position: "relative", height: 40 }}><div className="ripple" style={{ left: 130, top: 10 }} /><div className="ripple b" style={{ left: 130, top: 10 }} /></div>}
       {(done || p.status === "Executed") && <div className="receipt"><b>Reported on-chain · paid by the DAO contract</b>

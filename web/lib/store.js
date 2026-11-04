@@ -15,3 +15,8 @@ export async function listJson(prefix, afterName = "") {
   const fresh = names.filter(n => n > afterName).sort();
   return Promise.all(fresh.map(async n => { const r = await get(n, { access: "private" }); return JSON.parse(await new Response(r.stream).text()); }));
 }
+export async function getJsonFresh(pathname) {
+  if (!useBlob()) return mem.get(pathname) ?? null;
+  try { const r = await get(pathname, { access: "private", useCache: false }); return r?.stream ? JSON.parse(await new Response(r.stream).text()) : null; }
+  catch { return null; }
+}
