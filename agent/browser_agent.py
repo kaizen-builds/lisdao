@@ -29,6 +29,7 @@ LLM_URL = E("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/op
 LLM_KEY = E("LLM_API_KEY") or E("NEAR_AI_API_KEY") or E("GEMINI_API_KEY")
 LLM_MODEL = E("LLM_MODEL", "gemini-3.1-flash-lite")
 LLM_COOLDOWN = {"until": 0}
+ATTEMPTS = {}; MAX_ATTEMPTS = 2  # per task, counted only for crashed runs (exceptions)
 T0 = {"t": 0}
 import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -228,7 +229,14 @@ def main():
             for dao, prop, ex in tasks:
                 print(f"{time.strftime('%H:%M:%S')} picked up {dao}/{prop['id']} (poll {STATE['last_poll_ms']}ms)", flush=True)
                 try: run_task(dao, prop, ex)
-                except Exception as e: print("task error:", e, flush=True); time.sleep(5)
+                except Exception as e:
+                    k = (dao, prop["id"], ex); ATTEMPTS[k] = ATTEMPTS.get(k, 0) + 1
+                    print(f"task error (attempt {ATTEMPTS[k]}/{MAX_ATTEMPTS}):", e, flush=True)
+                    if ATTEMPTS[k] >= MAX_ATTEMPTS:  # stop retrying: mark Failed so the escrow is refunded to the DAO
+                        ids = {"task_id": prop["id"]} if ex else {"dao_id": dao, "proposal_id": prop["id"]}
+                        try: call("report_result", {**ids, "success": False, "report": f"agent error after {MAX_ATTEMPTS} attempts"}, EXECUTOR if ex else CONTRACT); feed(dao, prop["id"], f"Failed after {MAX_ATTEMPTS} attempts; reported failure on-chain", phase="failed")
+                        except Exception as e2: print("report_result failed:", str(e2)[:200], flush=True)
+                    else: time.sleep(5)
                 finally: STATE.update(state="idle", dao_id=None, proposal_id=None); beat()
         except Exception as e: print("tick error:", e, flush=True)
         if E("ONCE"): break
