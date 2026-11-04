@@ -20,6 +20,21 @@ async function view1(method, args) {
     return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
   } catch (e) { rpcI++; throw e; } finally { clearTimeout(to); }
 }
+// Ask the RPC for the final outcome of a tx; throws with the on-chain error if any action or receipt failed.
+async function verifyTx(hash, sender) {
+  for (let i = 0; i < 20; i++) {
+    for (const u of RPCS) { try {
+      const j = await (await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "EXPERIMENTAL_tx_status", params: { tx_hash: hash, sender_account_id: sender, wait_until: "EXECUTED_OPTIMISTIC" } }) })).json();
+      if (j.result) { const bad = [j.result.transaction_outcome, ...(j.result.receipts_outcome || [])].map(o => o.outcome.status).find(st => st && st.Failure);
+        if (j.result.status?.Failure || bad) throw new Error("ONCHAIN:" + JSON.stringify(j.result.status?.Failure || bad.Failure).slice(0, 160));
+        if (j.result.status?.SuccessValue !== undefined || j.result.status?.SuccessReceiptId) return true; }
+    } catch (e) { if (String(e.message).startsWith("ONCHAIN:")) throw e; } }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  throw new Error("Could not confirm the transaction on-chain");
+}
+const txHash = r => { const o = Array.isArray(r) ? r[r.length - 1] : r; return o?.transaction?.hash || o?.transaction_outcome?.id || o?.final_execution_outcome?.transaction?.hash || (typeof o === "string" ? o : null); };
+const TX = h => `https://testnet.nearblocks.io/txns/${h}`;
 const short = a => a && a.length > 22 ? a.slice(0, 10) + "…" + a.slice(-8) : a;
 const badge = s => ({ Active: "Voting", Approved: "Passed", Executing: "Passed", Executed: "Passed", Escalated: "Voting", Rejected: "Rejected", Failed: "Rejected" }[s]);
 const yocto = y => (Number(BigInt(y) / 10n ** 20n) / 1e4).toFixed(4);
@@ -68,7 +83,8 @@ export default function Home() {
   const [votes, setVotes] = useState([]); const [pane, setPane] = useState("summary"); const [pid, setPid] = useState(null);
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
-  const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "", desc: "" });
+  const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "Donate to the water project", desc: "Donate 0.1 NEAR to the water project", amt: "0.1" });
+  const [lastTx, setLastTx] = useState(null); const [err, setErr] = useState(""); const [adv, setAdv] = useState(false);
   const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null); const [bal, setBal] = useState(null);
 
   useEffect(() => { const q = new URLSearchParams(location.search);
@@ -82,7 +98,7 @@ export default function Home() {
     })();
     (async () => {
     if (q.get("e2e")) { // test mode: fake connected wallet that records txs instead of sending
-      window.__txs = []; const fake = { wallet: async () => ({ signAndSendTransaction: async t => { window.__txs.push(t); return {}; } }), disconnect: async () => {} };
+      window.__txs = []; const fake = { wallet: async () => ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }), disconnect: async () => {} };
       setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); return;
     }
     const { NearConnector } = await import("@hot-labs/near-connect");
@@ -103,7 +119,7 @@ export default function Home() {
       if (r.result) return setBal(Number(BigInt(r.result.amount) / 10n ** 20n) / 1e4); } catch {} } })(); }, [pane, acct]);
   async function load() { for (let i = 0; i < 4; i++) { try { setDaos(await view("list_daos")); return; } catch (e) { await new Promise(r => setTimeout(r, 500 * (i + 1))); } } }
   async function loadS(id) { const r = await loadSputnik(id, { policy: pol.current?.[id] }); pol.current = { ...pol.current, [id]: r.policy };
-    setSdao(r.dao); setProps(old => [...r.props, ...old.filter(x => x.optimistic && x.id >= r.props.length)]); return r; }
+    setSdao(r.dao); setProps(old => [...r.props, ...old.filter(x => x.optimistic && !r.props.some(y => y.id === x.id))]); return r; } // optimistic rows only exist in e2e test mode
   useEffect(() => { if (!acct || !isSputnik(cur)) return setTier(null);
     Promise.all([viewAt(EXECUTOR, "auto_cap", { account_id: acct }), viewAt(EXECUTOR, "reputation", { account_id: acct })]).then(([c, r]) => setTier({ cap: c, rep: r })).catch(() => {}); }, [acct, cur, props.filter(x => x.status === "Executed").length]);
   async function open(id) {
@@ -120,7 +136,9 @@ export default function Home() {
   async function vote(d, x, w) {
     if (!acct) return modal.show();
     const snap = props;
-    if (d.sputnik) { setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + 1, votes: [...q.votes, [acct, true]], status: q.yes + 1 >= d.need ? (q.action.AgentTask ? "Executing" : "Executed") : q.status } : q));
+    const e2e = acct === "e2e-user.testnet";
+    if (x.optimistic && !e2e) return flash("This proposal is not on-chain yet");
+    if (d.sputnik) { const onchain = e2e ? true : await viewAt(d.id, "get_proposal", { id: x.id }).catch(() => null); if (!onchain) return flash("That proposal does not exist on-chain");
       if (!(await call("act_proposal", { id: x.id, action: "VoteApprove", proposal: x.kind }, "0", d.id, "300000000000000"))) setProps(snap); else flash("Vote recorded in the Sputnik DAO"); return; }
     setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + w, status: (q.yes + w) * 100 >= d.total_weight * d.quorum_pct ? (q.action.AgentTask ? "Executing" : "Approved") : q.status } : q));
     setVotes(v => [...v, [acct, true]]);
@@ -135,9 +153,11 @@ export default function Home() {
     if (!acct) { modal?.show(); return false; }
     setBusy(true);
     try { const w = await sel.wallet();
-      await w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] });
-      refresh(); setTimeout(refresh, 1200); return true;
-    } catch (e) { const m = String(e?.message || e); flash(m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") ? "You already voted" : m.includes("reject") || m.includes("cancel") ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 80)); return false; }
+      const res = await w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] });
+      const h = txHash(res); if (!h) throw new Error("The wallet did not send a transaction");
+      if (h !== "e2e") await verifyTx(h, acct);
+      setLastTx(h); await refresh(); return h;
+    } catch (e) { const m = String(e?.message || e); setErr(""); flash(m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : m.includes("reject") || m.includes("cancel") ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 80)); return false; }
     finally { setBusy(false); }
   }
   const dao = isSputnik(cur) ? (sdao?.id === cur ? sdao : null) : daos.find(d => d.id === cur); const p = props.find(x => x.id === pid);
@@ -158,8 +178,9 @@ export default function Home() {
       <li style={{ animationDelay: ".25s" }}><b>3</b>The DAO pays automatically</li></ol>
     <button className="btn p full big glow" onClick={() => open(DEMO_SPUTNIK)}>Demo DAO</button>
     <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
-    <button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
-    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button>
+    <button className="link" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
+    {adv && <><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
+    <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></>}
     </div>{toast && <div className="toast">{toast}</div>}</>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
@@ -197,8 +218,9 @@ export default function Home() {
     <div className="wrap"><Stepper at={stage} /></div>
     <div className="grid">
       <div className="panel">
+        <button className="link" onClick={() => { setCur(null); setPane("summary"); }}>← Home</button>
         <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(isSputnik(e.target.value) ? e.target.value : +e.target.value)} aria-label="Switch DAO">
-          <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}<option value="home">← Home</option></select></div>
+          <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}</select></div>
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
         <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>Summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
@@ -207,7 +229,7 @@ export default function Home() {
       </div>
       <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
-          <Next>Create a proposal to start <button className="btn p sm" onClick={() => setPane("create")}>Create proposal</button></Next>
+          <Next>Tap “Create New Proposal” to start</Next>
           <h2>Summary</h2>
           {dao.sputnik ? <>{[["Name", dao.name], ["Sputnik DAO", <a key="a" href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">{dao.id} ↗</a>], ["Balance in NEAR", yocto(dao.treasury)],
             ["Votes needed", `${dao.need} of ${dao.total_weight} council`], ["AI executor", EXECUTOR], ["Your auto-approve tier", acct ? (tier ? `${yocto(tier.cap)} NEAR · reputation ${tier.rep}` : "…") : "connect wallet"]]
@@ -215,47 +237,52 @@ export default function Home() {
             <div className="muted" style={{ marginTop: 8 }}>Money and votes stay in the Sputnik DAO. When a task passes, the DAO escrows its spending cap with the LisDao executor. Payouts within your tier are paid at once; bigger ones go back to the council as a normal Sputnik Transfer proposal. Each finished task raises your tier.</div></>
           : [["Name", dao.name], ["Created At", "DAO #" + dao.id + " on NEAR testnet"], ["Creator Account", dao.owner], ["Balance in NEAR", yocto(dao.treasury)], ["Agent", dao.agent], ["Quorum", dao.quorum_pct + "%"]]
             .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
-          <button className="btn full" style={{ marginTop: 12 }} disabled={busy} onClick={() => { const n = prompt("Deposit how much NEAR into the treasury?", "1"); if (n && +n > 0) (dao.sputnik ? call("$transfer", {}, toYocto(n), dao.id) : call("deposit", { dao_id: dao.id }, toYocto(n))).then(ok => ok && flash("Deposit sent")); }}>+ Deposit NEAR</button>
+          <button className="link" style={{ marginTop: 12 }} disabled={busy} onClick={() => { const n = prompt("Deposit how much NEAR into the treasury?", "1"); if (n && +n > 0) (dao.sputnik ? call("$transfer", {}, toYocto(n), dao.id) : call("deposit", { dao_id: dao.id }, toYocto(n))).then(ok => ok && flash("Deposit sent")); }}>Fund treasury</button>
           <h3 style={{ marginTop: 28 }}>{dao.sputnik ? "Council" : "Members"}</h3>
           <div className="muted">Your votes: {myW} out of {dao.total_weight}</div>
-          <table style={{ marginTop: 10 }}><thead><tr><th>WALLET ADDRESS</th><th>VOTES</th><th>ACTIONS</th></tr></thead><tbody>
+          <table style={{ marginTop: 10 }}><thead><tr><th>WALLET ADDRESS</th><th>VOTES</th></tr></thead><tbody>
             {dao.members.map(([a, w]) => <tr key={a}><td>{a}</td><td>{w} ({Math.round(100 * w / dao.total_weight)}%)</td>
-              <td><button className="btn sm" title="Edit votes" onClick={() => { if (dao.sputnik) return flash("Council changes are made with a Sputnik proposal"); if (acct !== dao.owner) return flash("Only the DAO owner can edit votes"); const n = prompt("New votes for " + a, w); if (n !== null && n.trim() !== "" && +n >= 0) call("set_member", { dao_id: dao.id, account_id: a, weight: Math.floor(+n) }); }}>✎</button></td></tr>)}
+</tr>)}
           </tbody></table></>}
         {pane === "create" && <>
           <div className="row"><h2>Create Proposal</h2><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
           <Next>Describe the task in plain English, then create it</Next>
-          <div className="seg"><button className={"btn" + (f.kind !== "transfer" ? " p" : "")} onClick={() => setF({ ...f, kind: "agent" })}>AI agent task</button>
-            <button className={"btn" + (f.kind === "transfer" ? " p" : "")} onClick={() => setF({ ...f, kind: "transfer" })}>Send NEAR</button></div>
-          <label>Proposal Title</label><input placeholder="Donate to the water project" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+<label>Proposal Title</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
           {f.kind === "transfer" ? <>
             <label>Send to (NEAR account)</label><input placeholder="friend.testnet" value={f.to || ""} onChange={e => setF({ ...f, to: e.target.value.trim() })} />
-            <label>Amount (NEAR)</label><input inputMode="decimal" placeholder="0.1" value={f.amt || ""} onChange={e => setF({ ...f, amt: e.target.value })} />
+            <label>Amount (NEAR)</label><input inputMode="decimal" value={f.amt ?? "0.1"} onChange={e => setF({ ...f, amt: e.target.value })} />
           </> : <>
-            <label>What should the agent do?</label><textarea rows={4} placeholder="Donate 0.1 NEAR to the water project" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
+            <label>What should the agent do?</label><textarea rows={4} value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
           </>}
+          <div className="help">The agent may spend up to the NEAR amount you write in the task.</div>
+          {err && <div className="warn" role="alert">{err}</div>}
           <button className="btn p full big" disabled={busy} onClick={async () => {
-            const title = f.title.trim() || (f.kind === "transfer" ? "Send NEAR" : "Donate to the water project");
+            setErr("");
+            if (!f.title.trim()) return setErr("Enter a proposal title");
+            if (f.kind !== "transfer" && !f.desc.trim()) return setErr("Describe the task for the agent");
+            if (f.kind !== "transfer" && !(+((f.desc.match(/([\d.]+)\s*NEAR/i) || [])[1]) > 0)) return setErr("Say how much NEAR the task may spend, e.g. 'Donate 0.1 NEAR to …'");
+            const title = f.title.trim();
             let action;
             if (f.kind === "transfer") {
               if (!/^[a-z0-9._-]{2,64}$/.test(f.to || "") || !(+f.amt > 0)) return flash("Enter a valid account and amount");
               action = { Transfer: { receiver_id: f.to, amount: toYocto(f.amt) } };
             } else {
-              const desc = f.desc.trim() || "Donate 0.1 NEAR to the water project";
-              action = { AgentTask: { instructions: desc, max_spend: toYocto((desc.match(/([\d.]+)\s*NEAR/i) || [0, "0.1"])[1]) } };
+              const desc = f.desc.trim();
+              action = { AgentTask: { instructions: desc, max_spend: toYocto(desc.match(/([\d.]+)\s*NEAR/i)[1]) } };
             }
             const n = props.length;
-            let sent, kind;
+            let sent, kind, last;
             if (dao.sputnik) {
-              const last = await viewAt(dao.id, "get_last_proposal_id").catch(() => n);
+              try { last = await viewAt(dao.id, "get_last_proposal_id"); } catch { return setErr("Could not reach NEAR RPC, try again"); }
               kind = action.Transfer ? { Transfer: { token_id: "", receiver_id: action.Transfer.receiver_id, amount: action.Transfer.amount } }
                 : { FunctionCall: { receiver_id: EXECUTOR, actions: [{ method_name: "dispatch_task", deposit: action.AgentTask.max_spend, gas: "50000000000000",
                     args: btoa(JSON.stringify({ title, instructions: action.AgentTask.instructions, max_spend: action.AgentTask.max_spend, proposer: acct, proposal_id: last })) }] } };
               sent = await call("add_proposal", { proposal: { description: action.AgentTask ? `${title}: ${action.AgentTask.instructions}` : title, kind } }, dao.policy.proposal_bond, dao.id);
             } else sent = await call("propose", { dao_id: dao.id, title, action });
-            if (sent) { flash("Proposal created"); setF({ ...f, title: "", desc: "", to: "", amt: "" });
-              const optimistic = { id: n, proposer: acct, title, action, kind, yes: 0, no: 0, votes: [], status: "Active", deadline_ns: String(BigInt(Date.now()) * 1000000n + BigInt(dao.voting_period_ns)), result: null, optimistic: true };
-              setProps(ps => ps.some(x => x.id === n) ? ps : [...ps, optimistic]); setPid(n); setVotes([]); setPane("proposal"); } }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
+            if (sent) { const id = dao.sputnik ? last : n;
+              if (sent === "e2e") { setProps(ps => [...ps, { id, proposer: acct, title, action, kind, yes: 0, no: 0, votes: [], status: "Active", deadline_ns: String(BigInt(Date.now()) * 1000000n + BigInt(dao.voting_period_ns)), result: null, optimistic: true }]); }
+              else if (dao.sputnik) { const ok = await viewAt(dao.id, "get_proposal", { id }).catch(() => null); if (!ok) return setErr("The transaction went through but no proposal appeared on-chain"); await loadS(dao.id); }
+              flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
         {pane === "proposal" && p && <>
           <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
           {p.status === "Escalated" && <Next>Above the auto-approve tier. Council: vote on the new Transfer proposal</Next>}
@@ -274,7 +301,9 @@ export default function Home() {
             <button className="btn p full big" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{busy ? "Voting..." : "Vote Yes"}</button>
             <button className="btn full" style={{ marginTop: 8 }} disabled={busy} onClick={() => voteNo(dao, p, myW || 1)}>Vote No</button></>)}
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
-          {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>Watch the agent</button>}
+          {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && !agent && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>View Agent Execution</button>}
+          <div className="muted" style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank">View transaction ↗</a>}
+            {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">Proposal #{p.id} on the DAO ↗</a>}</div>
           {p.result && <div className="receipt" style={{ marginTop: 14 }}><b>Agent report (on-chain):</b> {p.result}</div>}
         </>}
       </div></div></>;
