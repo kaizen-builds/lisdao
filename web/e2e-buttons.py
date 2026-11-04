@@ -14,19 +14,19 @@ with sync_playwright() as p:
     last=lambda m: (txs(m) or [{}])[-1]
     # ---- landing + wallet ----
     m=page("?e2e=out")
-    btns=[x.inner_text() for x in m.locator(".center button").all()]; ok("Landing buttons", btns==["Demo DAO","Advanced ▾"], str(btns))
-    ok("Landing says built on Sputnik DAO", "Built on Sputnik DAO" in m.inner_text("body"))
-    m.click("text=Connect wallet"); m.wait_for_timeout(300); ok("Connect wallet", m.evaluate("!!window.__connectClicked") and "e2e-user" in m.inner_text(".nav"))
-    m.click(".nav .btn"); m.click("text=Sign out"); m.wait_for_timeout(300); ok("Sign out", "Connect wallet" in m.inner_text(".nav"))
+    btns=[x.inner_text() for x in m.locator(".lhero button").all()]; ok("Landing buttons", btns==["Try the demo","Advanced ▾"], str(btns))
+    ok("Landing says built on Sputnik DAO", "Built on: NEAR · Sputnik DAO · NEAR AI Cloud" in m.inner_text("body"))
+    m.click("text=Connect wallet"); m.wait_for_timeout(300); ok("Connect wallet", m.evaluate("!!window.__connectClicked") and "e2e-user" in m.inner_text(".navw"))
+    m.click(".navw .btn"); m.click("text=Sign out"); m.wait_for_timeout(300); ok("Sign out", "Connect wallet" in m.inner_text(".navw"))
     # ---- create Sputnik DAO ----
     m=page("?e2e=1"); m.click("text=Advanced"); m.click("text=Create New DAO"); m.fill("input >> nth=0","test-club"); m.fill("input >> nth=1","a.testnet"); m.click("text=Create Sputnik DAO"); m.wait_for_timeout(500)
     t=last(m); a=t.get("actions",[{}])[0].get("params",{}); pol=json.loads(base64.b64decode(a.get("args",{}).get("args","e30="))).get("policy",{}) if a else {}
     ok("Create New DAO -> Sputnik factory create tx", t.get("receiverId")=="sputnikv2.testnet" and a.get("methodName")=="create" and a["args"]["name"]=="test-club" and "e2e-user.testnet" in pol["roles"][0]["kind"]["Group"], str(t)[:140])
     m=page("?e2e=1"); m.click("text=Advanced"); m.click("text=Create New DAO"); m.fill("input >> nth=0","my-club"); m.wait_for_timeout(300); tx=m.inner_text("body"); ok("Create DAO helper text + balance + low-balance warning", "my-club.sputnikv2.testnet" in tx and "You are added automatically" in tx and "Your wallet balance: 3.00 NEAR" in tx and "faucet" in tx and "Any one member can approve" in tx)
     m.click("text=Majority must approve"); ok("Votes needed explains Majority", "More than half" in m.inner_text("body"))
-    m=page("?e2e=1"); m.click("text=Advanced"); m.click("text=Create New DAO"); m.click("text=← Back"); m.wait_for_timeout(300); ok("Create DAO Back", m.locator("text=Demo DAO").count()>0)
+    m=page("?e2e=1"); m.click("text=Advanced"); m.click("text=Create New DAO"); m.click("text=← Back"); m.wait_for_timeout(300); ok("Create DAO Back", m.locator("text=Try the demo").count()>0)
     # ---- Sputnik demo DAO ----
-    m.click("text=Demo DAO"); m.wait_for_selector("text=Votes needed", timeout=15000); m.wait_for_timeout(1500)
+    m.click("text=Try the demo"); m.wait_for_selector("text=Votes needed", timeout=15000); m.wait_for_timeout(1500)
     body=m.inner_text("body"); ok("Demo DAO opens Sputnik dashboard", D in body and "kaitrades.testnet" in body and "AI executor" in body, body[:0])
     ok("Shows auto-approve tier", "Your auto-approve tier" in body and "reputation" in body)
     m.click("text=Fund treasury"); m.wait_for_timeout(400); t=last(m); a=t["actions"][0]
@@ -54,7 +54,7 @@ with sync_playwright() as p:
     m.locator(".card", has_text="Donate 0.5").first.click(); m.wait_for_timeout(1500); ok("Escalated task explained", "Above the auto-approve tier" in m.inner_text("body"))
     m.click("text=DAO summary"); m.wait_for_timeout(300); older(m); m.locator(".card", has_text="LisDao task #1").first.click(); m.wait_for_timeout(1000)
     ok("Escalated Transfer proposal visible for council", "Escalated by the AI executor" in m.inner_text("body"))
-    m.click("text=← Home"); m.wait_for_timeout(500); ok("Home link", m.locator("text=Demo DAO").count()>0)
+    m.click("text=← Home"); m.wait_for_timeout(500); ok("Home link", m.locator("text=Try the demo").count()>0)
     c=b.new_page(viewport={"width":390,"height":844}); c.goto(B.rstrip("/")+"/demo-charity"); c.select_option("#asset","NEAR"); c.click("text=Next Step"); c.click("text=Next Step"); c.wait_for_selector("#deposit-address", timeout=15000); ok("Demo charity flow", len(c.inner_text("#deposit-address"))==64)
     m=page(f"?e2e=1&dao={D}"); m.wait_for_timeout(3000); older(m); m.wait_for_selector(".card >> text=Donate 0.1", timeout=15000); n0=len(txs(m))
     m.route("**/*", lambda r: r.abort() if r.request.method=="POST" and "rpc" in r.request.url else r.continue_())
