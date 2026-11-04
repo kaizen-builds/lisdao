@@ -4,7 +4,8 @@ export const dynamic = "force-dynamic";
 const pad = n => String(n).padStart(15, "0");
 export async function POST(req) {
   const tok = process.env.AGENT_FEED_TOKEN;
-  if (tok && req.headers.get("x-agent-token") !== tok) return new Response("forbidden", { status: 403 });
+  if (!tok) return new Response("feed disabled: AGENT_FEED_TOKEN not set on server", { status: 503 });
+  if (req.headers.get("x-agent-token") !== tok) return new Response("forbidden", { status: 403 });
   const e = await req.json(); const t = Date.now();
   if (!Number.isInteger(e.dao_id) || !Number.isInteger(e.proposal_id)) return new Response("bad request", { status: 400 });
   const rec = { dao_id: e.dao_id, proposal_id: e.proposal_id, text: String(e.text || "").slice(0, 600), shot: e.shot || null,
