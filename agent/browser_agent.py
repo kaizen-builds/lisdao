@@ -32,6 +32,7 @@ LLM_COOLDOWN = {"until": 0}
 T0 = {"t": 0}
 import threading
 HERE = os.path.dirname(os.path.abspath(__file__))
+ADDR_SEL = "#deposit-address"  # the demo charity renders the one-time address only here (web/app/demo-charity/page.js:36)
 ACCOUNT_RE = re.compile(r"\b([0-9a-f]{64}|(?:[a-z0-9_-]+\.)+(?:testnet|near))\b")
 
 def post(url, body, headers={}, timeout=60):
@@ -73,7 +74,7 @@ ELEMENTS_JS = """() => { let i = 0; const out = [];
   document.querySelectorAll('button, input, select, textarea, a, code').forEach(el => {
     const r = el.getBoundingClientRect(); if (!r.width || !r.height) return;
     el.dataset.lis = ++i;
-    out.push({ id: i, tag: el.tagName.toLowerCase(), label: el.getAttribute('aria-label') || el.innerText?.slice(0, 80) || el.placeholder || '',
+    out.push({ id: i, dom_id: el.id || undefined, tag: el.tagName.toLowerCase(), label: el.getAttribute('aria-label') || el.innerText?.slice(0, 80) || el.placeholder || '',
       value: el.value ?? null, options: el.tagName === 'SELECT' ? [...el.options].map(o => o.value + '=' + o.text) : undefined }); });
   return out; }"""
 HIGHLIGHT_JS = """([id, x, y]) => { const el = document.querySelector(`[data-lis="${id}"]`); const r = el.getBoundingClientRect();
@@ -111,7 +112,7 @@ Reply ONLY JSON: {{"verify":"ok|off_track|start","thought":"...","action":"click
 def scripted(goal_asset, goal_amount, elements):
     """Deterministic fallback planner (used when no vision key or the LLM is unavailable)."""
     for e in elements:
-        if e["tag"] == "code" and ACCOUNT_RE.search(e["label"] or ""): return {"verify": "ok", "thought": "deposit address visible", "action": "extract", "id": e["id"], "address": ACCOUNT_RE.search(e["label"]).group(1)}
+        if e["tag"] == "code" and e.get("dom_id") == ADDR_SEL[1:] and ACCOUNT_RE.fullmatch((e["label"] or "").strip()): return {"verify": "ok", "thought": "deposit address visible", "action": "extract", "id": e["id"], "address": e["label"].strip()}
     for e in elements:
         if e["tag"] == "select" and e["value"] != goal_asset: return {"verify": "ok", "thought": f"select {goal_asset}", "action": "select", "id": e["id"], "value": goal_asset}
     for e in elements:
@@ -170,12 +171,16 @@ def run_task(dao, prop, ex=False):
                 try: page.select_option(sel, value=a["value"])
                 except Exception: page.select_option(sel, label=a["value"])
             elif a["action"] == "extract":
-                dom = page.inner_text("body"); dom_ids = set(ACCOUNT_RE.findall(dom))
+                # Payee comes from ONE designated element (#deposit-address) only; the LLM's copy must match it exactly.
+                dl = page.locator(ADDR_SEL)
+                dom_addr = dl.first.inner_text().strip() if dl.count() else ""
                 cand = (a.get("address") or "").strip()
-                ocr = re.sub(r"\s+", "", ocr_text(page, sel)).lower().replace("l", "1").replace("o", "0")
-                ocr_ok = bool(cand) and difflib.SequenceMatcher(None, cand, ocr).ratio() > 0.9
-                if cand not in dom_ids: cand = next(iter(dom_ids), None)
-                feed(dao, pid, f"Verified address against page text{' and OCR' if ocr_ok else ' (OCR inconclusive)'}: {cand}", shot(page))
+                if not ACCOUNT_RE.fullmatch(dom_addr) or cand != dom_addr:
+                    feed(dao, pid, f"Refused: address in {ADDR_SEL} ({dom_addr or 'missing'}) does not exactly match the planner's ({cand or 'missing'})", shot(page), phase="failed")
+                    break
+                ocr = re.sub(r"\s+", "", ocr_text(page, ADDR_SEL)).lower().replace("l", "1").replace("o", "0")
+                ocr_ok = difflib.SequenceMatcher(None, cand, ocr).ratio() > 0.9  # advisory only
+                feed(dao, pid, f"Address in {ADDR_SEL} matches planner{' and OCR' if ocr_ok else ' (OCR inconclusive, advisory)'}: {cand}", shot(page))
                 address = cand; break
             page.wait_for_timeout(200)
             history.append({"step": step, "action": a["action"], "id": a.get("id"), "value": a.get("value"), "label": label})
