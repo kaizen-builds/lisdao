@@ -11,3 +11,4 @@ demo/*.webm
 demo/ui
 demo/agent
 demo/*.mp4
+!.env.example
