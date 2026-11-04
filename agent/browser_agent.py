@@ -56,6 +56,8 @@ VIEW = {"width": int(E("VIEW_W", "1280")), "height": int(E("VIEW_H", "800"))}  #
 RECORD = E("RECORD") == "1"
 RECORD_DIR = E("RECORD_DIR") or ("/workspace/recordings" if RECORD else None)
 SHOT_DIR = E("SHOT_DIR")
+# Visible fake mouse pointer for recordings: glides to each target, ripple on click. Default on when RECORD=1 or HEADLESS=0.
+CURSOR_OVERLAY = E("CURSOR_OVERLAY", "1" if (E("RECORD") == "1" or E("HEADLESS", "1") == "0") else "0") == "1"
 STEP_PAUSE = int(E("STEP_PAUSE_MS", "1200" if RECORD else "700"))  # highlight hold time so a viewer can read each step
 ACCOUNT_RE = re.compile(r"\b([0-9a-f]{64}|(?:[a-z0-9_-]+\.)+(?:testnet|near))\b")
 
@@ -121,6 +123,41 @@ HIGHLIGHT_JS = """([id, n, total, label]) => { const el = document.querySelector
   const dot = document.createElement('span'); dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#E8650A;flex:none'; bn.appendChild(dot);
   const tx = document.createElement('span'); tx.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
   tx.textContent = `LisDao agent · step ${n} · ${label}`; bn.appendChild(tx); }"""
+# Cursor overlay (init script, so it is re-injected on every navigation; last position kept in sessionStorage).
+CURSOR_INIT_JS = """(() => { const add = () => { if (document.getElementById('lis-cursor') || !document.body) return;
+  const s = document.createElement('style'); s.textContent = '#lis-cursor{position:fixed;left:0;top:0;width:26px;height:34px;pointer-events:none;z-index:2147483647;' +
+    'transition:transform 700ms cubic-bezier(.45,.05,.25,1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}' +
+    '@keyframes lisripple{0%{transform:translate(-50%,-50%) scale(.2);opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}' +
+    '.lis-ripple{position:fixed;width:44px;height:44px;border-radius:50%;border:3px solid #E8650A;background:rgba(232,101,10,.25);pointer-events:none;z-index:2147483647;animation:lisripple 550ms ease-out forwards}';
+  document.head.appendChild(s);
+  const c = document.createElement('div'); c.id = 'lis-cursor';
+  c.innerHTML = '<svg width="26" height="34" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17.5 29.5 L13 19.5 L22 19.5 Z" fill="#fff" stroke="#111" stroke-width="2" stroke-linejoin="round"/></svg>';
+  const p = JSON.parse(sessionStorage.getItem('lis-cursor') || 'null') || [innerWidth / 2, innerHeight / 2];
+  c.style.transition = 'none'; c.style.transform = `translate(${p[0]}px,${p[1]}px)`; document.body.appendChild(c);
+  requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transition = ''; })); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add(); })()"""
+CURSOR_MOVE_JS = """([x, y]) => { const c = document.getElementById('lis-cursor'); if (!c) return;
+  c.style.transform = `translate(${x - 2}px,${y - 2}px)`; sessionStorage.setItem('lis-cursor', JSON.stringify([x - 2, y - 2])); }"""
+CURSOR_RIPPLE_JS = """([x, y]) => { const r = document.createElement('div'); r.className = 'lis-ripple'; r.style.left = x + 'px'; r.style.top = y + 'px';
+  document.body.appendChild(r); setTimeout(() => r.remove(), 600); }"""
+TARGET_CENTER_JS = """id => { const el = document.querySelector(`[data-lis="${id}"]`); if (!el) return null;
+  el.scrollIntoView({ block: 'center', inline: 'nearest' }); const r = el.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"""
+
+def glide_to(page, id_):
+    """Scroll the target into view and glide the visible cursor to its center. Returns (x, y) or None."""
+    if not CURSOR_OVERLAY: return None
+    try:
+        page.evaluate(CURSOR_INIT_JS); xy = page.evaluate(TARGET_CENTER_JS, id_)
+        if not xy: return None
+        page.evaluate(CURSOR_MOVE_JS, xy); page.wait_for_timeout(750); return xy
+    except Exception: return None
+
+def real_click_move(page, xy):
+    """Move the real mouse there (25 steps) and show a ripple, right before the click."""
+    if not (CURSOR_OVERLAY and xy): return
+    try: page.mouse.move(xy[0], xy[1], steps=25); page.evaluate(CURSOR_RIPPLE_JS, xy); page.wait_for_timeout(150)
+    except Exception: pass
+
 CLEAR_HL_JS = "() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())"
 
 def short_label(s, n=40):
@@ -223,11 +260,12 @@ def run_task(dao, prop, ex=False):
     use_llm = bool(LLM_KEY)
     feed(dao, pid, f"Opening browser · planner: {'vision LLM ' + LLM_MODEL if use_llm else 'scripted fallback (no vision key)'}")
     with sync_playwright() as p:
-        b = p.chromium.launch(headless=E("HEADLESS", "1") == "1", args=[f"--window-size={VIEW['width']},{VIEW['height'] + 90}"])
+        b = p.chromium.launch(headless=E("HEADLESS", "1") == "1", args=[f"--window-size={VIEW['width']},{VIEW['height'] + 90}", "--window-position=0,0"])
         if RECORD_DIR: os.makedirs(RECORD_DIR, exist_ok=True)
         ctx = b.new_context(viewport=VIEW, device_scale_factor=1, record_video_dir=RECORD_DIR or None, record_video_size=VIEW if RECORD_DIR else None)
         allowed = origin(CHARITY)  # origin lock: every request to another origin is aborted (data: URLs are allowed)
         ctx.route("**/*", lambda r: r.continue_() if origin(r.request.url) == allowed or r.request.url.startswith("data:") else r.abort())
+        if CURSOR_OVERLAY: ctx.add_init_script(CURSOR_INIT_JS)
         page = ctx.new_page(); page.goto(CHARITY, wait_until="domcontentloaded"); page.wait_for_selector("button", timeout=15000)
         page.wait_for_timeout(STEP_PAUSE // 2)
         feed(dao, pid, f"Loaded {CHARITY}", shot(page), url=page.url, step=0)
@@ -246,12 +284,14 @@ def run_task(dao, prop, ex=False):
             if page.locator(sel).count() == 0: history.append({"error": f"element {a.get('id')} not found"}); continue
             label = next((e["label"] for e in els if e["id"] == a["id"]), "")
             desc = describe(a, label); n = len(history) + 1
+            xy = glide_to(page, a["id"]) if a["action"] != "extract" else None
             page.evaluate(HIGHLIGHT_JS, [a["id"], n, MAX_STEPS, desc]); page.wait_for_timeout(STEP_PAUSE)
             hl = shot(page)
             if SHOT_DIR: os.makedirs(SHOT_DIR, exist_ok=True); page.screenshot(path=os.path.join(SHOT_DIR, f"step-{n:02d}.png"))
             feed(dao, pid, f"{desc} · {a.get('thought','')} [{src}]", hl, url=page.url, step=n, action=a["action"])
             page.evaluate(CLEAR_HL_JS)
             before = page.inner_text("body")
+            if a["action"] in ("click", "type", "select"): real_click_move(page, xy)
             if a["action"] == "click":
                 page.click(sel)
                 try: page.wait_for_function("t => document.body.innerText !== t && !document.body.innerText.includes('Generating')", arg=before, timeout=10000)
