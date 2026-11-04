@@ -97,15 +97,29 @@ th{text-align:left;font-size:12px;color:var(--muted);padding:8px;border-bottom:1
 .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 16px;border-radius:10px;z-index:40;max-width:calc(100% - 32px)}
 
 /* agent feed */
-.agent{position:fixed;left:16px;top:72px;bottom:16px;width:360px;background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 12px 32px rgba(20,26,51,.18);display:flex;flex-direction:column;z-index:30}
+.agent{position:fixed;left:16px;top:72px;bottom:16px;width:min(620px,calc(100vw - 32px));background:#fff;border:1px solid var(--line);border-radius:var(--r);box-shadow:0 16px 40px rgba(20,26,51,.22);display:flex;flex-direction:column;z-index:30;animation:pop .25s ease both}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
 .chrome{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-size:14px}
 .dot{font-size:13px;color:var(--muted)}.dot::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#B9B4AE;margin-right:6px}.dot.on{color:var(--ok)}.dot.on::before{background:#16A34A}
-.screen{flex:1;padding:16px;overflow:auto}
-.shot{width:100%;max-height:46vh;object-fit:contain;object-position:top;border:1px solid var(--line);border-radius:8px;margin-bottom:12px;display:block;background:#F2F7FB;position:sticky;top:0}
+.screen{flex:1;min-height:0;padding:16px;display:flex;flex-direction:column;gap:12px}.slist{flex:1;min-height:0;overflow:auto}
+.bframe{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;flex:none;box-shadow:0 2px 8px rgba(20,26,51,.06)}
+.bbar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F6F1EA;border-bottom:1px solid var(--line);font-size:13px}
+.bbar .url{flex:1;min-width:0;background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}.bbar .url b{color:var(--navy);font-weight:600}
+.lock{font-size:12px;opacity:.7}
+.bview{position:relative;background:#F2F7FB}
+.shot{width:100%;max-height:44vh;object-fit:contain;object-position:top;display:block;background:#F2F7FB}
+.bstep{position:absolute;right:8px;bottom:8px;background:var(--navy);color:#fff;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px}
+.bcap{padding:8px 12px;font-size:14px;font-weight:600;border-top:1px solid var(--line);overflow-wrap:anywhere}
+.steps2{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.s2{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;font-size:14px;transition:background .2s}.s2.on{background:var(--o-bg)}
+.s2t{flex:1;min-width:0;overflow-wrap:anywhere}
+.tick{flex:none;width:22px;height:22px;border-radius:50%;background:var(--ok-bg);color:var(--ok);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.s2.bad .tick{background:var(--bad-bg);color:var(--bad)}.s2.now .tick{background:var(--o-bg)}
+.thumb{flex:none;width:64px;height:40px;padding:0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#F2F7FB;cursor:pointer}.thumb img{width:100%;height:100%;object-fit:cover;object-position:top;display:block}
 .step{padding:8px 12px;border-left:3px solid var(--o);margin-bottom:8px;font-size:14px;overflow-wrap:anywhere}.step.bad{border-color:var(--bad)}
 .pad{padding:12px 16px;border-top:1px solid var(--line)}
 
 @media (max-width:760px){.grid{grid-template-columns:1fr;padding:12px}.grid>.panel:nth-child(2){order:-1}.panel{padding:16px}
- .kv{flex-direction:column;gap:2px}.kv b{width:auto}.agent{left:8px;right:8px;width:auto;top:64px;bottom:8px}.st em{display:none}.st.now em{display:inline}.navlink{font-size:13px}}
+ .kv{flex-direction:column;gap:2px}.kv b{width:auto}.agent{left:8px;right:8px;width:auto;top:64px;bottom:8px}.shot{max-height:30vh}.screen{padding:12px}.st em{display:none}.st.now em{display:inline}.navlink{font-size:13px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 .help+h2{margin-top:16px}.panel>.link{padding:0}

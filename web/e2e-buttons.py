@@ -50,6 +50,23 @@ with sync_playwright() as p:
     m.locator(".card", has_text="Donate 0.1").first.click(); m.wait_for_timeout(1500); ok("Open passed Sputnik proposal", "Progress:" in m.inner_text("body"))
     m.click("text=View Agent Execution"); m.wait_for_timeout(7000); ok("Agent panel shows live steps + receipt", m.locator(".agent").count()==1 and "paid by the LisDao executor" in m.inner_text(".agent") and ("Loaded" in m.inner_text(".agent") or "agent offline" in m.inner_text(".agent")), m.inner_text(".agent")[:300] if m.locator(".agent").count() else "no panel")
     m.click(".agent >> text=Close"); m.wait_for_timeout(2500); ok("Agent panel close stays closed", m.locator(".agent").count()==0)
+    # ---- live browser panel with mock feed data (no agent, no chain writes) ----
+    import os, time as _t; FX=os.path.join(os.path.dirname(os.path.abspath(__file__)),"test","fixtures")
+    sh=lambda n: base64.b64encode(open(os.path.join(FX,f"agent-step-{n}.jpg"),"rb").read()).decode()
+    U="http://localhost:3000/demo-charity"; T0=int(_t.time()*1000)
+    mock=[{"text":"Proposal passed. Task: “Donate 0.1 NEAR to the water project”","phase":"start","reset":True,"t":T0},
+      {"text":"Clear “Donation Amount” and type 0.1 · clear default amount and type ours [LLM]","shot":sh("02"),"url":U,"step":2,"action":"type","t":T0+1},
+      {"text":"Read one-time deposit address · deposit address visible [LLM]","shot":sh("05"),"url":U,"step":5,"action":"extract","t":T0+2}]
+    def fake_feed(r):
+        q=r.request.url; r.fulfill(json=mock if "since=0" in q else [])
+    for vp,fn in [((390,844),"/workspace/browser-view-mobile.png"),((1280,800),"/workspace/browser-view-desktop.png")]:
+        mm=b.new_page(viewport={"width":vp[0],"height":vp[1]}); mm.on("pageerror",lambda e:errs.append(str(e)[:150])); mm.route("**/api/agent?*", fake_feed)
+        mm.goto(B+f"?e2e=1&dao={D}"); mm.wait_for_timeout(4000); older(mm); mm.wait_for_selector(".card >> text=Donate 0.1", timeout=15000)
+        mm.locator(".card", has_text="Donate 0.1").first.click(); mm.wait_for_timeout(1500); mm.click("text=View Agent Execution"); mm.wait_for_selector(".agent .bframe img.shot", timeout=10000); mm.wait_for_timeout(800)
+        txt=mm.inner_text(".agent")
+        ok(f"Live browser panel @{vp[0]}px: URL bar, big screenshot, numbered steps, thumbnails", "localhost:3000/demo-charity" in mm.inner_text("[data-testid=agent-url]") and "Step 5" in txt and "Step 2 · Clear" in txt and mm.locator(".agent .thumb").count()==2 and mm.locator(".agent .tick").count()>=3 and "[LLM]" not in txt and mm.evaluate("document.querySelector('.agent').scrollWidth<=document.querySelector('.agent').clientWidth+1"), txt[:200])
+        mm.locator(".agent .thumb").first.click(); mm.wait_for_timeout(400); ok(f"Thumbnail click shows that step @{vp[0]}px", "Clear “Donation Amount”" in mm.inner_text(".agent .bcap"))
+        mm.locator(".agent .thumb").last.click(); mm.wait_for_timeout(400); mm.screenshot(path=fn); mm.close()
     m.click("text=DAO summary"); m.wait_for_timeout(300); older(m)
     m.locator(".card", has_text="Donate 0.5").first.click(); m.wait_for_timeout(1500); ok("Escalated task explained", "Above the auto-approve tier" in m.inner_text("body"))
     m.click("text=DAO summary"); m.wait_for_timeout(300); older(m); m.locator(".card", has_text="LisDao task #1").first.click(); m.wait_for_timeout(1000)

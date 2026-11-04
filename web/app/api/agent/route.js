@@ -2,7 +2,7 @@
 import { putJson, listJson } from "../../../lib/store";
 import { tokenOk } from "../../../lib/token";
 export const dynamic = "force-dynamic";
-const MAX_SHOT = 400_000; // base64 chars (~300 KB JPEG); agent shots are 420x760 q45
+const MAX_SHOT = 400_000; // base64 chars (~300 KB JPEG); agent shots are 1280x800 JPEG q45 (~60-150 KB)
 const B64 = /^[A-Za-z0-9+/]+={0,2}$/, TX = /^[1-9A-HJ-NP-Za-km-z]{43,44}$/;
 const ADDR = /^([0-9a-f]{64}|([a-z0-9_-]+\.)+(testnet|near))$/, PHASES = new Set(["start", "done", "failed"]);
 const pad = n => String(n).padStart(15, "0");
@@ -16,8 +16,11 @@ export async function POST(req) {
   if (e.phase != null && !PHASES.has(e.phase)) return new Response("bad phase", { status: 400 });
   if (e.tx != null && !TX.test(e.tx)) return new Response("bad tx", { status: 400 });
   if (e.address != null && !ADDR.test(e.address)) return new Response("bad address", { status: 400 });
+  const url = typeof e.url === "string" && /^https?:\/\/[^\s]{1,300}$/.test(e.url) ? e.url : null; // shown in the UI address bar (text only)
+  const step = Number.isInteger(e.step) && e.step >= 0 && e.step < 100 ? e.step : null;
+  const action = ["click", "type", "select", "extract"].includes(e.action) ? e.action : null;
   const rec = { dao_id: e.dao_id, proposal_id: e.proposal_id, text: String(e.text || "").slice(0, 600), shot: e.shot || null,
-    phase: e.phase || null, tx: e.tx || null, address: e.address || null, escalated: !!e.escalated, reset: !!e.reset, t };
+    phase: e.phase || null, tx: e.tx || null, address: e.address || null, escalated: !!e.escalated, reset: !!e.reset, url, step, action, t };
   await putJson(`feed/${e.dao_id}-${e.proposal_id}/${pad(t)}-${Math.random().toString(36).slice(2, 7)}.json`, rec);
   return Response.json({ ok: true });
 }

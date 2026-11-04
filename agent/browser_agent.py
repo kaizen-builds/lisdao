@@ -9,6 +9,9 @@ Tesseract OCR cross-check) and calls report_payout; the contract pays from the t
 Env: CONTRACT_ID, AGENT_ID, CHARITY_URL, FEED_URL, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
      LLM_PROVIDER (nearai -> NEARAI_API_KEY, NEARAI_MODEL), LLM_TIMEOUT, LLM_RETRIES,
      AGENT_FEED_TOKEN, RECORD_DIR, HEADLESS, ONCE, DRY_RUN (or --dry-run).
+Recording: RECORD=1 saves a Playwright video of the agent's browser tab (charity origin only) to RECORD_DIR
+     (default /workspace/recordings); SHOT_DIR saves each highlighted step as a PNG; STEP_PAUSE_MS sets how long
+     each highlight stays on screen (default 700, 1200 when recording). See scripts/record-run.sh.
 """
 import base64, difflib, json, os, re, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
@@ -48,6 +51,12 @@ origin = lambda u: "{0.scheme}://{0.netloc}".format(urlsplit(u))
 HERE = os.path.dirname(os.path.abspath(__file__))
 ADDR_REREADS = 2  # extra LLM re-reads of the address after a mismatch
 ADDR_SEL = "#deposit-address"  # the demo charity renders the one-time address only here (web/app/demo-charity/page.js:36)
+MAX_STEPS = 14
+VIEW = {"width": int(E("VIEW_W", "1280")), "height": int(E("VIEW_H", "800"))}  # clean, fixed browser size (also the video size)
+RECORD = E("RECORD") == "1"
+RECORD_DIR = E("RECORD_DIR") or ("/workspace/recordings" if RECORD else None)
+SHOT_DIR = E("SHOT_DIR")
+STEP_PAUSE = int(E("STEP_PAUSE_MS", "1200" if RECORD else "700"))  # highlight hold time so a viewer can read each step
 ACCOUNT_RE = re.compile(r"\b([0-9a-f]{64}|(?:[a-z0-9_-]+\.)+(?:testnet|near))\b")
 
 def post(url, body, headers={}, timeout=60):
@@ -93,15 +102,36 @@ ELEMENTS_JS = """() => { let i = 0; const out = [];
     out.push({ id: i, dom_id: el.id || undefined, tag: el.tagName.toLowerCase(), label: el.getAttribute('aria-label') || el.innerText?.slice(0, 80) || el.placeholder || '',
       value: el.value ?? null, options: el.tagName === 'SELECT' ? [...el.options].map(o => o.value + '=' + o.text) : undefined }); });
   return out; }"""
-HIGHLIGHT_JS = """([id, x, y]) => { const el = document.querySelector(`[data-lis="${id}"]`); const r = el.getBoundingClientRect();
-  const box = document.createElement('div'); box.className = 'lis-hl';
-  box.style.cssText = `position:fixed;left:${r.left-3}px;top:${r.top-3}px;width:${r.width+6}px;height:${r.height+6}px;border:3px solid #3B82F6;border-radius:6px;z-index:99999;pointer-events:none`;
-  document.body.appendChild(box);
-  if (!document.getElementById('lis-rip')) { const s = document.createElement('style'); s.id = 'lis-rip';
-    s.textContent = '@keyframes lisrip{from{transform:translate(-50%,-50%) scale(.2);opacity:1}to{transform:translate(-50%,-50%) scale(3);opacity:0}}'; document.head.appendChild(s); }
-  for (const d of [0, 300]) { const c = document.createElement('div'); c.className = 'lis-hl';
-    c.style.cssText = `position:fixed;left:${r.left+r.width/2}px;top:${r.top+r.height/2}px;width:28px;height:28px;border:3px solid #3B82F6;border-radius:50%;z-index:99999;pointer-events:none;animation:lisrip 1s ${d}ms ease-out infinite`;
-    document.body.appendChild(c); } }"""
+# Agent overlay (drawn by LisDao, not page content): numbered pulsing orange ring on the chosen element,
+# a short label next to it, and a bottom banner "LisDao agent · step N · action". Text is set with textContent only.
+HIGHLIGHT_JS = """([id, n, total, label]) => { const el = document.querySelector(`[data-lis="${id}"]`); if (!el) return;
+  el.scrollIntoView({ block: 'center', inline: 'nearest' }); const r = el.getBoundingClientRect();
+  if (!document.getElementById('lis-style')) { const s = document.createElement('style'); s.id = 'lis-style';
+    s.textContent = '@keyframes lispulse{0%{box-shadow:0 0 0 0 rgba(232,101,10,.55)}100%{box-shadow:0 0 0 14px rgba(232,101,10,0)}}' +
+      '.lis-hl{position:fixed;pointer-events:none;z-index:2147483646;font:600 14px/1.3 system-ui,-apple-system,Segoe UI,sans-serif}';
+    document.head.appendChild(s); }
+  const mk = css => { const d = document.createElement('div'); d.className = 'lis-hl'; d.style.cssText = css; document.body.appendChild(d); return d; };
+  mk(`left:${r.left-5}px;top:${r.top-5}px;width:${r.width+10}px;height:${r.height+10}px;border:3px solid #E8650A;border-radius:10px;background:rgba(232,101,10,.08);animation:lispulse 1s ease-out infinite`);
+  const b = mk(`left:${Math.max(4, r.left-16)}px;top:${Math.max(4, r.top-16)}px;width:28px;height:28px;border-radius:50%;background:#E8650A;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.25)`);
+  b.textContent = String(n);
+  const right = r.right + 350 < innerWidth, below = r.bottom + 90 < innerHeight;
+  const t = mk(`left:${right ? r.right + 14 : Math.min(Math.max(4, r.left), innerWidth - 340)}px;top:${right ? r.top + r.height / 2 - 16 : below ? r.bottom + 12 : Math.max(8, r.top - 44)}px;max-width:330px;background:#141A33;color:#fff;padding:6px 10px;border-radius:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.25)`);
+  t.textContent = label;
+  const bn = mk(`left:50%;transform:translateX(-50%);bottom:16px;height:40px;max-width:calc(100% - 32px);border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.3);background:#141A33;color:#fff;display:flex;align-items:center;gap:10px;padding:0 18px;font-weight:500`);
+  const dot = document.createElement('span'); dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#E8650A;flex:none'; bn.appendChild(dot);
+  const tx = document.createElement('span'); tx.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  tx.textContent = `LisDao agent · step ${n} · ${label}`; bn.appendChild(tx); }"""
+CLEAR_HL_JS = "() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())"
+
+def short_label(s, n=40):
+    s = re.sub(r"\s+", " ", str(s or "")).strip()
+    return s if len(s) <= n else s[:n - 1] + "…"
+
+def describe(a, label):
+    """Short human label for the overlay and feed, e.g. 'Click “Next Step”' or 'Clear amount and type 0.1'."""
+    L = short_label(label)
+    return {"click": f"Click “{L}”", "type": f"Clear “{L}” and type {short_label(a.get('value'), 20)}",
+            "select": f"Select {short_label(a.get('value'), 20)} in “{L}”", "extract": "Read one-time deposit address"}[a["action"]]
 
 def llm_read_address(img):
     """Ask the vision LLM to transcribe the one-time deposit address from a screenshot. Returns '' on failure."""
@@ -193,16 +223,18 @@ def run_task(dao, prop, ex=False):
     use_llm = bool(LLM_KEY)
     feed(dao, pid, f"Opening browser · planner: {'vision LLM ' + LLM_MODEL if use_llm else 'scripted fallback (no vision key)'}")
     with sync_playwright() as p:
-        b = p.chromium.launch(headless=E("HEADLESS", "1") == "1")
-        ctx = b.new_context(viewport={"width": 420, "height": 760},  record_video_dir=E("RECORD_DIR") or None, record_video_size={"width": 420, "height": 760})
+        b = p.chromium.launch(headless=E("HEADLESS", "1") == "1", args=[f"--window-size={VIEW['width']},{VIEW['height'] + 90}"])
+        if RECORD_DIR: os.makedirs(RECORD_DIR, exist_ok=True)
+        ctx = b.new_context(viewport=VIEW, device_scale_factor=1, record_video_dir=RECORD_DIR or None, record_video_size=VIEW if RECORD_DIR else None)
         allowed = origin(CHARITY)  # origin lock: every request to another origin is aborted (data: URLs are allowed)
         ctx.route("**/*", lambda r: r.continue_() if origin(r.request.url) == allowed or r.request.url.startswith("data:") else r.abort())
         page = ctx.new_page(); page.goto(CHARITY, wait_until="domcontentloaded"); page.wait_for_selector("button", timeout=15000)
-        feed(dao, pid, f"Loaded {CHARITY}", shot(page))
+        page.wait_for_timeout(STEP_PAUSE // 2)
+        feed(dao, pid, f"Loaded {CHARITY}", shot(page), url=page.url, step=0)
         history = []; address = None
-        for step in range(14):
+        for step in range(MAX_STEPS):
             if origin(page.url) != allowed: feed(dao, pid, f"Refused: browser left {allowed} ({page.url[:120]})", phase="failed"); break
-            page.evaluate("() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())")
+            page.evaluate(CLEAR_HL_JS)
             els = page.evaluate(ELEMENTS_JS); img = shot(page)
             a = llm(goal + f" (pay with NEAR, amount {amount_near})", history, img, els) if use_llm else None
             src = "LLM"
@@ -212,17 +244,19 @@ def run_task(dao, prop, ex=False):
             if a["action"] == "fail": feed(dao, pid, "Agent could not find a next step: " + a.get("thought", ""), img, phase="failed"); break
             sel = f'[data-lis="{a.get("id")}"]'
             if page.locator(sel).count() == 0: history.append({"error": f"element {a.get('id')} not found"}); continue
-            page.evaluate(HIGHLIGHT_JS, [a["id"], 0, 0]); page.wait_for_timeout(250)
             label = next((e["label"] for e in els if e["id"] == a["id"]), "")
-            desc = {"click": f"Click “{label}”", "type": f"Clear “{label}” and type {a.get('value')}", "select": f"Select {a.get('value')} in “{label}”", "extract": "Read one-time deposit address"}[a["action"]]
-            feed(dao, pid, f"{desc} · {a.get('thought','')} [{src}]", shot(page))
-            page.evaluate("() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())")
+            desc = describe(a, label); n = len(history) + 1
+            page.evaluate(HIGHLIGHT_JS, [a["id"], n, MAX_STEPS, desc]); page.wait_for_timeout(STEP_PAUSE)
+            hl = shot(page)
+            if SHOT_DIR: os.makedirs(SHOT_DIR, exist_ok=True); page.screenshot(path=os.path.join(SHOT_DIR, f"step-{n:02d}.png"))
+            feed(dao, pid, f"{desc} · {a.get('thought','')} [{src}]", hl, url=page.url, step=n, action=a["action"])
+            page.evaluate(CLEAR_HL_JS)
             before = page.inner_text("body")
             if a["action"] == "click":
                 page.click(sel)
                 try: page.wait_for_function("t => document.body.innerText !== t && !document.body.innerText.includes('Generating')", arg=before, timeout=10000)
                 except Exception: pass
-            elif a["action"] == "type": page.click(sel); page.keyboard.press("Control+A"); page.keyboard.press("Delete"); page.type(sel, str(a["value"]), delay=15)
+            elif a["action"] == "type": page.click(sel); page.keyboard.press("Control+A"); page.keyboard.press("Delete"); page.wait_for_timeout(STEP_PAUSE // 3); page.type(sel, str(a["value"]), delay=90 if RECORD else 40)
             elif a["action"] == "select":
                 try: page.select_option(sel, value=a["value"])
                 except Exception: page.select_option(sel, label=a["value"])
@@ -242,11 +276,18 @@ def run_task(dao, prop, ex=False):
                     break
                 ocr = re.sub(r"\s+", "", ocr_text(page, ADDR_SEL)).lower().replace("l", "1").replace("o", "0")
                 ocr_ok = difflib.SequenceMatcher(None, cand, ocr).ratio() > 0.9  # advisory only
-                feed(dao, pid, f"Address in {ADDR_SEL} matches planner{' and OCR' if ocr_ok else ' (OCR inconclusive, advisory)'}: {cand}", shot(page))
+                feed(dao, pid, f"Address in {ADDR_SEL} matches planner{' and OCR' if ocr_ok else ' (OCR inconclusive, advisory)'}: {cand}", shot(page), url=page.url)
                 address = cand; break
-            page.wait_for_timeout(200)
+            page.wait_for_timeout(STEP_PAUSE // 2)
             history.append({"step": step, "action": a["action"], "id": a.get("id"), "value": a.get("value"), "label": label})
-        ctx.close(); b.close()
+        vid = page.video
+        ctx.close()
+        if vid:  # save under a readable name (must happen before the browser closes)
+            out = os.path.join(RECORD_DIR, f"lisdao-run-{time.strftime('%Y%m%d-%H%M%S')}.webm")
+            try: vid.save_as(out); vid.delete()
+            except Exception as e: print("  video rename failed:", str(e)[:100]); out = vid.path()
+            print(f"Recorded browser video: {out}", flush=True)
+        b.close()
     if DRY_RUN:
         print(f"DRY RUN: extracted address {address or 'NONE'} · would call report_payout(receiver_id={address}, amount={yocto}) · LLM usage {json.dumps(USAGE)}", flush=True)
         return address

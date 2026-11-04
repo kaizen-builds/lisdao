@@ -105,6 +105,8 @@ AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vi
 # If the LLM's address read doesn't exactly match #deposit-address, the agent asks it to re-read up to 2 more times; it never pays the DOM value unless the LLM's read equals it exactly.
 # Dry run (browser + LLM + #deposit-address check, no feed posts, no on-chain calls):
 #   LLM_PROVIDER=nearai NEARAI_API_KEY=... CHARITY_URL=https://lisdao.vercel.app/demo-charity python3 agent/browser_agent.py --dry-run
+# Record the agent's browser (1280x800 video + one PNG per highlighted step, DRY_RUN only, no money moves):
+#   WEB_URL=http://localhost:3000 scripts/record-run.sh      # -> /workspace/recordings/lisdao-run-*.webm
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
 # To fetch it ahead of time (from repo root): ./agent/fetch-ocr-data.sh
 

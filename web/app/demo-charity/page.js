@@ -2,7 +2,7 @@
 import { useState } from "react";
 import QRCode from "qrcode";
 const S = { page: { minHeight: "100vh", background: "#F2F7FB", fontFamily: "system-ui", color: "#0B2540" },
-  head: { background: "#0B5CAD", color: "#fff", padding: "14px 18px", fontWeight: 700 }, box: { background: "#fff", margin: 16, padding: 20, borderRadius: 8, boxShadow: "0 1px 3px rgba(0,0,0,.1)" },
+  head: { background: "#0B5CAD", color: "#fff", padding: "14px 18px", fontWeight: 700 }, box: { background: "#fff", margin: "24px auto", maxWidth: 560, width: "calc(100% - 32px)", boxSizing: "border-box", padding: 20, borderRadius: 8, boxShadow: "0 1px 3px rgba(0,0,0,.1)" },
   in: { width: "100%", padding: 12, border: "1px solid #B8C7D6", borderRadius: 6, fontSize: 16, margin: "6px 0 16px", boxSizing: "border-box" },
   btn: { width: "100%", padding: 14, background: "#F5A623", border: "none", borderRadius: 6, fontSize: 16, fontWeight: 700, color: "#0B2540", cursor: "pointer" } };
 export default function Charity() {

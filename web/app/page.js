@@ -42,22 +42,38 @@ function Agent({ dao, p, onClose }) {
     const tick = async () => { try { const r = await (await fetch(`/api/agent?dao=${fd}&pid=${fp}&since=${since}`)).json();
       if (r.length && on) { since = r[r.length - 1].t; setEv(e => (r.some(x => x.reset) ? r : [...e, ...r])); } } catch {} };
     tick(); const t = setInterval(tick, 2000); return () => { on = false; clearInterval(t); }; }, [fd, fp]);
-  const box = useRef(null);
-  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); }, [ev.length]);
-  const last = [...ev].reverse().find(e => e.shot); const done = ev.find(e => e.phase === "done");
-  const failed = ev.find(e => e.phase === "failed");
-  return <div className="agent" role="dialog" aria-label="Agent live feed"><div className="chrome"><b>Agent · live browser</b>{hb && <span className={"dot" + (hb.online ? " on" : "")}>{hb.online ? "agent online" : "agent offline"}</span>}</div>
-    <div className="screen" ref={box}>
-      {last ? <img key={last.t} src={"data:image/jpeg;base64," + last.shot} alt="agent browser" className="shot fade" />
-        : !done && <div className="sk" style={{ height: 220 }} />}
+  const box = useRef(null); const [pick, setPick] = useState(null);
+  useEffect(() => { box.current?.scrollTo({ top: box.current.scrollHeight, behavior: "smooth" }); setPick(null); }, [ev.length]);
+  const shots = ev.filter(e => e.shot); const last = shots[shots.length - 1]; const done = ev.find(e => e.phase === "done");
+  const failed = ev.find(e => e.phase === "failed"); const view = (pick !== null && ev[pick]?.shot) ? ev[pick] : last;
+  const url = [...ev].reverse().find(e => e.url)?.url || "";
+  const host = (() => { try { const u = new URL(url); return { o: u.host, p: u.pathname }; } catch { return null; } })();
+  const working = !done && !failed && p.status === "Executing";
+  const label = e => e.text.replace(/\s*\[(LLM|scripted)\]$/, "");
+  return <div className="agent" role="dialog" aria-label="Agent live browser">
+    <div className="chrome"><b>Live browser</b>{hb && <span className={"dot" + (hb.online ? " on" : "")}>{hb.online ? "agent online" : "agent offline"}</span>}</div>
+    <div className="screen">
+      <div className="bframe">
+        <div className="bbar"><span className="lock" aria-hidden="true">{host?.o?.startsWith("localhost") ? "ⓘ" : "🔒"}</span>
+          <span className="url" title={url} data-testid="agent-url">{host ? <><b>{host.o}</b>{host.p}</> : <span className="muted">waiting for the agent’s browser…</span>}</span>
+          {working && <span className="pulse" aria-label="working" />}</div>
+        <div className="bview">{view ? <img key={view.t} src={"data:image/jpeg;base64," + view.shot} alt={"Agent browser: " + label(view)} className="shot fade" />
+          : <div className="sk" style={{ height: 220, margin: 0 }} />}
+          {view?.step > 0 && <span className="bstep">Step {view.step}</span>}</div>
+        {view && <div className="bcap">{label(view)}</div>}
+      </div>
+      <div className="slist" ref={box}>
       {ev.length === 0 && p.status === "Executing" && <div className="step">{hb?.online ? (hb.state === "working" && hb.dao_id === fd && hb.proposal_id === fp ? "Agent picked it up · opening the browser…" : "Agent online · starting the task…") : hb ? "Agent is offline right now · it will pick this up as soon as it is back" : "Checking the agent…"}</div>}
-      {ev.map((e, i) => <div className={"step" + (e.phase === "failed" ? " bad" : "")} key={e.t + "" + i}>{e.phase === "failed" ? "⚠ " : "✓ "}{e.text}</div>)}
-      {!done && !failed && p.status === "Executing" && <div className="step"><span className="pulse" /> Working…</div>}
+      <ol className="steps2">{ev.map((e, i) => <li key={e.t + "" + i} className={"s2" + (e.phase === "failed" ? " bad" : "") + (view === e ? " on" : "")}>
+        <span className="tick" aria-hidden="true">{e.phase === "failed" ? "!" : "✓"}</span>
+        <span className="s2t">{e.step > 0 && <b>Step {e.step} · </b>}{label(e)}</span>
+        {e.shot && <button className="thumb" aria-label={"Show screenshot: " + label(e)} onClick={() => setPick(i)}><img src={"data:image/jpeg;base64," + e.shot} alt="" /></button>}</li>)}
+        {working && <li className="s2 now"><span className="tick"><span className="pulse" /></span><span className="s2t">Working…</span></li>}</ol>
       {(done || p.status === "Executed" || p.status === "Escalated") && <div className="receipt"><b>{p.status === "Escalated" || done?.escalated ? "Above the auto-approve tier · sent to the council as a Sputnik Transfer proposal" : dao.sputnik ? "Reported on-chain · paid by the LisDao executor from the DAO’s escrow" : "Reported on-chain · paid by the DAO contract"}</b>
         {done?.address && <div>To: {done.address}</div>}
         {done?.tx && <div><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank" rel="noopener noreferrer">Agent payout tx ↗</a></div>}
         {p.result && <div className="small">{p.result}</div>}</div>}
-    </div>
+    </div></div>
     <div className="pad"><button className="btn full" onClick={onClose}>Close</button></div></div>;
 }
 
