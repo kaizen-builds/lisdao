@@ -14,6 +14,8 @@ from playwright.sync_api import sync_playwright
 
 E = os.environ.get
 CONTRACT = E("CONTRACT_ID", "lisdao-v2-1793741346.testnet")
+EXECUTOR = E("EXECUTOR_ID", "exec.lisdao-v2-1793741346.testnet")  # Sputnik DAO executor
+SPUTNIK_FEED = 9000  # live-feed key for executor tasks: feed/9000-<task_id>
 AGENT = E("AGENT_ID", "lisdao-agent-1793741346.testnet")
 WEB = E("WEB_URL", "http://localhost:3000")
 CHARITY = E("CHARITY_URL", WEB + "/demo-charity")
@@ -36,16 +38,16 @@ def post(url, body, headers={}, timeout=60):
     req = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json", **headers})
     return json.loads(urllib.request.urlopen(req, timeout=timeout).read() or b"null")
 
-def view(method, args):
+def view(method, args, contract=None):
     for i, rpc in enumerate(RPCS):
-        try: return _view(rpc, method, args, RPC_TIMEOUTS[min(i, len(RPC_TIMEOUTS) - 1)])
+        try: return _view(rpc, method, args, contract or CONTRACT, RPC_TIMEOUTS[min(i, len(RPC_TIMEOUTS) - 1)])
         except Exception as e:
             print(f"  rpc {rpc} failed: {str(e)[:100]}", flush=True)
             if i == len(RPCS) - 1: raise
 
-def _view(RPC, method, args, timeout):
+def _view(RPC, method, args, contract, timeout):
     r = post(RPC, {"jsonrpc": "2.0", "id": 1, "method": "query", "params": {"request_type": "call_function", "finality": "optimistic",
-        "account_id": CONTRACT, "method_name": method, "args_base64": base64.b64encode(json.dumps(args).encode()).decode()}}, timeout=timeout)
+        "account_id": contract, "method_name": method, "args_base64": base64.b64encode(json.dumps(args).encode()).decode()}}, timeout=timeout)
     if "error" in r or "error" in r.get("result", {}): raise RuntimeError(str(r)[:200])
     return json.loads(bytes(r["result"]["result"]))
 
@@ -58,8 +60,8 @@ def _feed(dao, pid, text, shot, kw):
     try: post(FEED, {"dao_id": dao, "proposal_id": pid, "text": text, "shot": shot, **kw}, {"x-agent-token": E("AGENT_FEED_TOKEN", "")}, 10)
     except Exception as e: print("  feed error:", e)
 
-def call(method, args):
-    out = subprocess.run(["near", "contract", "call-function", "as-transaction", CONTRACT, method, "json-args", json.dumps(args),
+def call(method, args, contract=None):
+    out = subprocess.run(["near", "contract", "call-function", "as-transaction", contract or CONTRACT, method, "json-args", json.dumps(args),
         "prepaid-gas", "100 Tgas", "attached-deposit", "0 NEAR", "sign-as", AGENT, "network-config", "testnet",
         "sign-with-legacy-keychain", "send"], capture_output=True, text=True, timeout=90)
     txt = out.stdout + out.stderr
@@ -125,13 +127,16 @@ def ocr_text(page, sel=None):
     try: return subprocess.run(["node", os.path.join(HERE, "ocr.js"), path], capture_output=True, text=True, timeout=120, cwd=HERE).stdout
     except Exception as e: return ""
 
-def run_task(dao, prop):
+def run_task(dao, prop, ex=False):
+    """ex=True: task from the Sputnik executor (args keyed by task_id)."""
+    tgt = EXECUTOR if ex else CONTRACT
+    ids = (lambda: {"task_id": prop["id"]}) if ex else (lambda: {"dao_id": dao, "proposal_id": prop["id"]})
     T0["t"] = time.time(); pid = prop["id"]; STATE.update(state="working", dao_id=dao, proposal_id=pid); beat(); task = prop["action"]["AgentTask"]; goal = task["instructions"]
     cap = int(task["max_spend"]); m = re.search(r"([\d.]+)\s*NEAR", goal, re.I)
     amount_near = m.group(1) if m else str(cap / 1e24)
     yocto = int(round(float(amount_near) * 1e6)) * 10**18
     feed(dao, pid, f"Proposal passed. Task: “{goal}”", reset=True, phase="start")
-    if yocto > cap: feed(dao, pid, "Refused: amount exceeds the proposal's spending cap", phase="failed"); call("report_result", {"dao_id": dao, "proposal_id": pid, "success": False, "report": "over cap"}); return
+    if yocto > cap: feed(dao, pid, "Refused: amount exceeds the proposal's spending cap", phase="failed"); call("report_result", {**ids(), "success": False, "report": "over cap"}, tgt); return
     use_llm = bool(LLM_KEY)
     feed(dao, pid, f"Opening browser · planner: {'vision LLM ' + LLM_MODEL if use_llm else 'scripted fallback (no vision key)'}")
     with sync_playwright() as p:
@@ -176,11 +181,15 @@ def run_task(dao, prop):
             history.append({"step": step, "action": a["action"], "id": a.get("id"), "value": a.get("value"), "label": label})
         ctx.close(); b.close()
     if not address:
-        call("report_result", {"dao_id": dao, "proposal_id": pid, "success": False, "report": "agent failed to reach deposit address"}); return
-    feed(dao, pid, f"Reporting address on-chain; contract pays {amount_near} NEAR from treasury…")
-    tx = call("report_payout", {"dao_id": dao, "proposal_id": pid, "receiver_id": address, "amount": str(yocto),
-        "report": f"Donated via {CHARITY} one-time address"})
-    feed(dao, pid, f"Done in {time.time() - T0['t']:.0f}s. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
+        call("report_result", {**ids(), "success": False, "report": "agent failed to reach deposit address"}, tgt); return
+    feed(dao, pid, f"Reporting address on-chain; {'LisDao executor pays from the Sputnik DAO escrow' if ex else 'contract pays from treasury'} ({amount_near} NEAR)…")
+    tx = call("report_payout", {**ids(), "receiver_id": address, "amount": str(yocto),
+        "report": f"Donated via {CHARITY} one-time address"}, tgt)
+    st = (view("get_task", {"task_id": pid}, EXECUTOR) or {}).get("status") if ex else None
+    if st == "Escalated":
+        feed(dao, pid, f"{amount_near} NEAR is above this proposer's auto-approve tier, so the executor returned the escrow and opened a Sputnik Transfer proposal to {address}. The council votes on it in the DAO.", phase="done", tx=tx, address=address, escalated=True)
+    else:
+        feed(dao, pid, f"Done in {time.time() - T0['t']:.0f}s. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
     time.sleep(1)
 
 def beat():
@@ -199,15 +208,17 @@ def heartbeat_loop():
         time.sleep(5)
 
 def main():
-    print(f"{time.strftime('%H:%M:%S')} LisDao agent {AGENT} watching {CONTRACT} · poll {POLL}s · LLM {LLM_MODEL} @ {LLM_URL}", flush=True)
+    print(f"{time.strftime('%H:%M:%S')} LisDao agent {AGENT} watching {CONTRACT} + Sputnik executor {EXECUTOR} · poll {POLL}s · LLM {LLM_MODEL} @ {LLM_URL}", flush=True)
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     while True:
         try:
             t = time.time(); tasks = view("pending_tasks", {"agent": AGENT})
             STATE.update(last_poll=time.time(), last_poll_ms=int((time.time() - t) * 1000), polls=STATE["polls"] + 1)
-            for dao, prop in tasks:
+            try: tasks = [(SPUTNIK_FEED, t, True) for t in view("pending_tasks", {}, EXECUTOR)] + [(d, p, False) for d, p in tasks]
+            except Exception as e: print("executor poll error:", str(e)[:120], flush=True); tasks = [(d, p, False) for d, p in tasks]
+            for dao, prop, ex in tasks:
                 print(f"{time.strftime('%H:%M:%S')} picked up {dao}/{prop['id']} (poll {STATE['last_poll_ms']}ms)", flush=True)
-                try: run_task(dao, prop)
+                try: run_task(dao, prop, ex)
                 except Exception as e: print("task error:", e, flush=True); time.sleep(5)
                 finally: STATE.update(state="idle", dao_id=None, proposal_id=None); beat()
         except Exception as e: print("tick error:", e, flush=True)

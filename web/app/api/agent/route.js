@@ -8,7 +8,7 @@ export async function POST(req) {
   const e = await req.json(); const t = Date.now();
   if (!Number.isInteger(e.dao_id) || !Number.isInteger(e.proposal_id)) return new Response("bad request", { status: 400 });
   const rec = { dao_id: e.dao_id, proposal_id: e.proposal_id, text: String(e.text || "").slice(0, 600), shot: e.shot || null,
-    phase: e.phase || null, tx: e.tx || null, address: e.address || null, reset: !!e.reset, t };
+    phase: e.phase || null, tx: e.tx || null, address: e.address || null, escalated: !!e.escalated, reset: !!e.reset, t };
   await putJson(`feed/${e.dao_id}-${e.proposal_id}/${pad(t)}-${Math.random().toString(36).slice(2, 7)}.json`, rec);
   return Response.json({ ok: true });
 }

@@ -66,3 +66,4 @@ input:focus,textarea:focus{outline:none;border-color:var(--o);box-shadow:0 0 0 3
 .receipt,.kv span,.step{overflow-wrap:anywhere;word-break:break-word}
 .st.done.now{background:#D1FAE5;color:#065F46}.st.done.now span{background:#10B981;color:#fff;animation:none}
 @media (max-width:760px){body{overflow-x:hidden}.grid>.panel:nth-child(2){order:-1}}
+.linkbtn{background:none;border:0;color:var(--muted,#6b7280);text-decoration:underline;font-size:13px;margin-top:14px;cursor:pointer;display:block;width:100%}
