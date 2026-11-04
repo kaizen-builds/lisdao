@@ -74,7 +74,7 @@ export default function Home() {
   const [votes, setVotes] = useState([]); const [pane, setPane] = useState("summary"); const [pid, setPid] = useState(null);
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
-  const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "Donate to the water project", desc: "Donate 0.1 NEAR to the water project", amt: "0.1" });
+  const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "", desc: "", amt: "" });
   const [lastTx, setLastTx] = useState(null); const [lastKind, setLastKind] = useState(""); const [wReady, setWReady] = useState(false); const [err, setErr] = useState(""); const [phase, setPhase] = useState(""); const [adv, setAdv] = useState(false);
   const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null); const [bal, setBal] = useState(null);
 
@@ -299,12 +299,12 @@ export default function Home() {
         {pane === "create" && <>
           <div className="row"><h2>Create Proposal</h2></div>
           <Next>Describe the task in plain English, then create it</Next>
-<label>Proposal Title</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
+<label>Proposal Title</label><input placeholder="e.g. Donate to the water project" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
           {f.kind === "transfer" ? <>
             <label>Send to (NEAR account)</label><input placeholder="friend.testnet" value={f.to || ""} onChange={e => setF({ ...f, to: e.target.value.trim() })} />
-            <label>Amount (NEAR)</label><input inputMode="decimal" value={f.amt ?? "0.1"} onChange={e => setF({ ...f, amt: e.target.value })} />
+            <label>Amount (NEAR)</label><input inputMode="decimal" placeholder="0.1" value={f.amt ?? ""} onChange={e => setF({ ...f, amt: e.target.value })} />
           </> : <>
-            <label>What should the agent do?</label><textarea rows={4} value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
+            <label>What should the agent do?</label><textarea rows={4} placeholder="e.g. Donate 0.1 NEAR to the water project" value={f.desc} onChange={e => setF({ ...f, desc: e.target.value })} />
           </>}
           <div className="help">The agent may spend up to the NEAR amount you write in the task.</div>
           {err && <div className="warn" role="alert">{err}</div>}

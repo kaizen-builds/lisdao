@@ -32,8 +32,8 @@ with sync_playwright() as p:
     m.click("text=Fund treasury"); m.wait_for_timeout(400); t=last(m); a=t["actions"][0]
     ok("Deposit = plain transfer to Sputnik DAO", t["receiverId"]==D and a["type"]=="Transfer" and a["params"]["deposit"]=="1000000000000000000000000")
     ok("Removed buttons gone", m.locator("button[title='Edit votes']").count()==0 and m.locator("button:text-is('Create proposal')").count()==0)
-    m.click("text=Create New Proposal"); ok("Create form prefilled, no Send NEAR toggle", m.input_value("input >> nth=0")=="Donate to the water project" and "0.1 NEAR" in m.input_value("textarea") and m.locator("button:text-is('Send NEAR')").count()==0)
-    m.fill("textarea",""); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(400); ok("Empty task blocked with inline error", "Describe the task" in m.inner_text("body"))
+    m.click("text=Create New Proposal"); ok("Create form starts empty, no Send NEAR toggle", m.input_value("input >> nth=0")=="" and m.input_value("textarea")=="" and m.locator("button:text-is('Send NEAR')").count()==0)
+    m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(400); ok("Empty title blocked", "Enter a proposal title" in m.inner_text("body")); m.fill("input >> nth=0","Donate to the water project"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(400); ok("Empty task blocked with inline error", "Describe the task" in m.inner_text("body"))
     m.fill("input >> nth=0","Donate to the water project"); m.fill("textarea","Donate 0.1 NEAR to the water project"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(1200)
     t=last(m); a=t["actions"][0]["params"]; k=a["args"]["proposal"]["kind"].get("FunctionCall",{}); inner=json.loads(base64.b64decode(k["actions"][0]["args"])) if k else {}
     ok("AI task -> Sputnik add_proposal FunctionCall to executor", t["receiverId"]==D and a["methodName"]=="add_proposal" and k["receiver_id"]==X and k["actions"][0]["method_name"]=="dispatch_task" and k["actions"][0]["deposit"]=="100000000000000000000000" and inner["proposer"]=="e2e-user.testnet" and a["deposit"]=="10000000000000000000000", json.dumps(inner)[:120])
@@ -41,7 +41,7 @@ with sync_playwright() as p:
     m.click("button:has-text('Vote Yes')"); m.wait_for_timeout(600); t=last(m); a=t["actions"][0]["params"]
     ok("Vote Yes -> act_proposal VoteApprove (300 Tgas)", t["receiverId"]==D and a["methodName"]=="act_proposal" and a["args"]["action"]=="VoteApprove" and a["gas"]=="300000000000000" and "FunctionCall" in a["args"]["proposal"])
     m.wait_for_timeout(800); ok("Vote does not fake a Passed state", "Agent executing" not in m.inner_text("body"))
-    m.click("text=DAO summary"); m.wait_for_timeout(300); m.click("text=Create New Proposal"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(1200)
+    m.click("text=DAO summary"); m.wait_for_timeout(300); m.click("text=Create New Proposal"); m.fill("input >> nth=0","Donate to the water project"); m.fill("textarea","Donate 0.1 NEAR to the water project"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(1200)
     m.click("text=Vote No"); m.wait_for_timeout(600); a=last(m)["actions"][0]["params"]; ok("Vote No -> VoteReject", a["methodName"]=="act_proposal" and a["args"]["action"]=="VoteReject")
     # ---- finished real tasks ----
     m=page(f"?e2e=1&dao={D}"); m.wait_for_timeout(4000)
@@ -58,10 +58,10 @@ with sync_playwright() as p:
     c=b.new_page(viewport={"width":390,"height":844}); c.goto(B.rstrip("/")+"/demo-charity"); c.select_option("#asset","NEAR"); c.click("text=Next Step"); c.click("text=Next Step"); c.wait_for_selector("#deposit-address", timeout=15000); ok("Demo charity flow", len(c.inner_text("#deposit-address"))==64)
     m=page(f"?e2e=1&dao={D}"); m.wait_for_timeout(3000); older(m); m.wait_for_selector(".card >> text=Donate 0.1", timeout=15000); n0=len(txs(m))
     m.route("**/*", lambda r: r.abort() if r.request.method=="POST" and "rpc" in r.request.url else r.continue_())
-    m.click("text=Create New Proposal"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(15000)
+    m.click("text=Create New Proposal"); m.fill("input >> nth=0","Donate to the water project"); m.fill("textarea","Donate 0.1 NEAR to the water project"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(15000)
     ok("Submit reaches wallet call even if RPC read fails", len(txs(m))==n0+1 and "Could not reach" not in m.inner_text("body"), m.inner_text(".grid")[-200:])
     m=page(f"?e2e=dead&dao={D}"); m.wait_for_timeout(3000); older(m); m.wait_for_selector(".card >> text=Donate 0.1", timeout=15000)
-    m.click("text=Create New Proposal"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(2000)
+    m.click("text=Create New Proposal"); m.fill("input >> nth=0","Donate to the water project"); m.fill("textarea","Donate 0.1 NEAR to the water project"); m.click("button:has-text('Submit proposal')"); m.wait_for_timeout(2000)
     ok("Dead wallet session -> reconnect message", "Reconnect wallet" in m.inner_text("body") and m.evaluate("!!window.__connectClicked"))
     ext=[]; m=b.new_page(); m.on("request", lambda r: ext.append(r.url) if ("rpc.testnet.near.org" in r.url or "fastnear" in r.url) else None); m.goto(B+f"?e2e=1&dao={D}"); m.wait_for_timeout(6000)
     ok("Browser makes no direct public-RPC calls (uses /api/rpc)", not ext, str(ext[:2]))
