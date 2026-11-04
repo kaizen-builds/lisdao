@@ -218,11 +218,11 @@ export default function Home() {
     <div className="wrap"><Stepper at={stage} /></div>
     <div className="grid">
       <div className="panel">
-        <button className="link" onClick={() => { setCur(null); setPane("summary"); }}>← Home</button>
+        <button className="link" style={{ padding: 0, marginBottom: 6 }} onClick={() => { setCur(null); setPane("summary"); }}>← Home</button>
         <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(isSputnik(e.target.value) ? e.target.value : +e.target.value)} aria-label="Switch DAO">
           <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}</select></div>
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
-        <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>Summary</div>
+        <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>DAO summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
         {props.slice().reverse().map(x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
           <div className="row"><span>{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div></div>)}
@@ -245,7 +245,7 @@ export default function Home() {
 </tr>)}
           </tbody></table></>}
         {pane === "create" && <>
-          <div className="row"><h2>Create Proposal</h2><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
+          <div className="row"><h2>Create Proposal</h2></div>
           <Next>Describe the task in plain English, then create it</Next>
 <label>Proposal Title</label><input value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
           {f.kind === "transfer" ? <>
@@ -273,7 +273,8 @@ export default function Home() {
             const n = props.length;
             let sent, kind, last;
             if (dao.sputnik) {
-              try { last = await viewAt(dao.id, "get_last_proposal_id"); } catch { return setErr("Could not reach NEAR RPC, try again"); }
+              try { last = await viewAt(dao.id, "get_last_proposal_id"); } catch (e) { console.error("get_last_proposal_id", e);
+                const ids = props.filter(x => !x.optimistic).map(x => x.id); if (!ids.length) return setErr("Could not reach NEAR RPC, try again"); last = Math.max(...ids) + 1; }
               kind = action.Transfer ? { Transfer: { token_id: "", receiver_id: action.Transfer.receiver_id, amount: action.Transfer.amount } }
                 : { FunctionCall: { receiver_id: EXECUTOR, actions: [{ method_name: "dispatch_task", deposit: action.AgentTask.max_spend, gas: "50000000000000",
                     args: btoa(JSON.stringify({ title, instructions: action.AgentTask.instructions, max_spend: action.AgentTask.max_spend, proposer: acct, proposal_id: last })) }] } };
@@ -282,9 +283,9 @@ export default function Home() {
             if (sent) { const id = dao.sputnik ? last : n;
               if (sent === "e2e") { setProps(ps => [...ps, { id, proposer: acct, title, action, kind, yes: 0, no: 0, votes: [], status: "Active", deadline_ns: String(BigInt(Date.now()) * 1000000n + BigInt(dao.voting_period_ns)), result: null, optimistic: true }]); }
               else if (dao.sputnik) { const ok = await viewAt(dao.id, "get_proposal", { id }).catch(() => null); if (!ok) return setErr("The transaction went through but no proposal appeared on-chain"); await loadS(dao.id); }
-              flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
+              flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{busy ? "Submitting..." : "Submit proposal"}</button></>}
         {pane === "proposal" && p && <>
-          <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
+          <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1></div>
           {p.status === "Escalated" && <Next>Above the auto-approve tier. Council: vote on the new Transfer proposal</Next>}
           {p.status === "Active" && <Next>{votes2.some(v => v[0] === acct) ? "Waiting for more Yes votes" : "Vote Yes to send it to the agent"}</Next>}
           {p.status === "Executing" && <Next><span className="pulse" /> The agent is working…</Next>}

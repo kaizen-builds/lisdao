@@ -4,18 +4,22 @@ export const FACTORY = "sputnikv2.testnet";
 export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_ID || "exec.lisdao-v2-1793741346.testnet";
 export const DEMO_SPUTNIK = process.env.NEXT_PUBLIC_SPUTNIK_DAO || "lisdao-demo.sputnikv2.testnet";
 export const FEED_DAO = 9000; // live feed key for executor tasks
-const RPCS = ["https://test.rpc.fastnear.com", "https://rpc.testnet.near.org"];
+export const RPCS = ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];
 let rpcI = 0;
-async function rpc(params) {
-  for (let i = 0; ; i++) {
-    const url = RPCS[rpcI % RPCS.length]; const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 6000);
+// Try each testnet RPC (6 s timeout each), up to 2 rounds; log real errors, throw only if all fail.
+export async function rpcCall(method, params) {
+  const errs = [];
+  for (let i = 0; i < RPCS.length * 2; i++) {
+    const url = RPCS[(rpcI + i) % RPCS.length]; const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 6000);
     try {
-      const r = await fetch(url, { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params }) });
-      const j = await r.json(); if (j.error || j.result?.error) throw new Error(JSON.stringify(j.error || j.result.error));
-      return j.result;
-    } catch (e) { rpcI++; if (i > 2) throw e; await new Promise(r => setTimeout(r, 600)); } finally { clearTimeout(to); }
+      const r = await fetch(url, { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
+      const j = await r.json(); if (j.error || j.result?.error) { const e = new Error(JSON.stringify(j.error || j.result.error)); e.rpc = true; throw e; }
+      rpcI = (rpcI + i) % RPCS.length; return j.result;
+    } catch (e) { errs.push(url + ": " + (e?.message || e)); if (e.rpc && i >= 1) break; } finally { clearTimeout(to); }
   }
+  console.error("NEAR RPC failed", method, errs); throw new Error(errs[errs.length - 1]);
 }
+const rpc = params => rpcCall("query", params);
 export async function viewAt(account_id, method_name, args = {}) {
   const r = await rpc({ request_type: "call_function", finality: "optimistic", account_id, method_name, args_base64: btoa(JSON.stringify(args)) });
   return JSON.parse(new TextDecoder().decode(new Uint8Array(r.result)));
