@@ -157,11 +157,19 @@ export default function Home() {
     try { let w;
       try { w = live.current || await withTimeout(sel.wallet(), 8000, "no wallet"); live.current = w; }
       catch (e) { console.error("wallet session", e); reconnect(); return false; }
-      const res = await withTimeout(w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] }), 60000, "WALLET_TIMEOUT");
+      // Wait for the wallet without failing early: a moved or blurred popup can still sign later.
+      // After 60 s show a soft "still waiting" note; it is cleared as soon as any result arrives.
+      // Only after 10 min with no result do we report WALLET_TIMEOUT; a late success still clears it.
+      const sign = w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] });
+      const slow = setTimeout(() => setErr("Still waiting for your wallet. Approve or reject the request there."), 60000);
+      let res; try { res = await withTimeout(sign, 600000, "WALLET_TIMEOUT"); }
+      catch (e) { if (String(e?.message) === "WALLET_TIMEOUT") sign.then(r => { if (txHash(r)) { setErr(""); setLastTx(txHash(r)); setLastKind(methodName); refresh(); } }, () => {}); throw e; }
+      finally { clearTimeout(slow); }
+      setErr("");
       const h = txHash(res); if (!h) { if (res == null && acct !== "e2e-user.testnet") { reconnect(); return false; } throw new Error("The wallet did not send a transaction"); }
       setPhase("confirm"); if (h !== "e2e") await verifyTx(h, acct);
       setLastTx(h); setLastKind(methodName); refresh(); return h;
-    } catch (e) { console.error("tx", e); const m = String(e?.message || e); const msg = m === "WALLET_TIMEOUT" ? "Wallet did not respond. Open your wallet and try again." : m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : /reject|cancel|closed|denied/i.test(m) ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 100);
+    } catch (e) { console.error("tx", e); const m = String(e?.message || e); const msg = m === "WALLET_TIMEOUT" ? "No answer from your wallet after 10 minutes. Open your wallet and try again." : m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : /reject|cancel|closed|denied/i.test(m) ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 100);
       setErr(msg); flash(msg); return false; }
     finally { setBusy(false); setPhase(""); }
   }
