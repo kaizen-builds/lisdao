@@ -183,20 +183,49 @@ export default function Home() {
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
         <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
 
-  if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
-    <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><p className="pitch">A DAO whose AI agent does real-world tasks after members vote.</p>
-    <div className="hint" style={{ marginTop: -6 }}>Built on Sputnik DAO · the DAO keeps the money and the votes, LisDao adds the agent</div>
-    <div className="hint">Agent model can run on NEAR AI Cloud</div>
-    <ol className="how">
-      <li style={{ animationDelay: ".05s" }}><b>1</b>Vote on a task</li>
-      <li style={{ animationDelay: ".15s" }}><b>2</b>The agent does it in a real browser</li>
-      <li style={{ animationDelay: ".25s" }}><b>3</b>The DAO pays automatically</li></ol>
+  if (cur === null && pane !== "create-dao") return <>{nav}<main className="land fade">
+    <section className="hero center" aria-labelledby="hero-title">
+    <div><Drop size={80} /></div><h1 id="hero-title" style={{ margin: "4px 0" }}><Wordmark size={40} /></h1>
+    <p className="eyebrow">NEAR AI + Sputnik DAO</p>
+    <p className="pitch">Your community DAO votes on a web task. An AI agent, which can run on NEAR AI Cloud, does it in a real browser. An executor contract pays on-chain.</p>
+    <div className="hint">Built on Sputnik DAO · the DAO keeps the money and the votes, LisDao adds the agent</div>
     <button className="btn p full big glow" onClick={() => open(DEMO_SPUTNIK)}>Demo DAO</button>
-    <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
+    <div className="hint">Try it on NEAR testnet: create a proposal, vote Yes, watch the agent</div>
     <button className="link" onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
     {adv && <><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
     <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></>}
-    </div>{toast && <div className="toast">{toast}</div>}</>;
+    </section>
+
+    <section className="sec" aria-labelledby="how-title"><h2 id="how-title">How it works</h2>
+    <ol className="how flow">
+      <li><b>1</b><div><strong>Vote</strong><span>Members propose a task and vote in a Sputnik DAO v2 on NEAR testnet. The DAO holds the treasury.</span></div></li>
+      <li><b>2</b><div><strong>Agent acts</strong><span>When the vote passes, an AI agent opens a real browser and does the task. Its model can run on NEAR AI Cloud.</span></div></li>
+      <li><b>3</b><div><strong>Paid on-chain</strong><span>The agent reports to the LisDao executor contract, which sends the NEAR, within a spending limit.</span></div></li></ol></section>
+
+    <section className="sec" aria-labelledby="built-title"><h2 id="built-title">Built on</h2>
+    <ul className="chips">
+      <li><strong>NEAR</strong><span>testnet accounts and contracts</span></li>
+      <li><strong>Sputnik DAO v2</strong><span>votes and treasury</span></li>
+      <li><strong>NEAR AI Cloud</strong><span>agent model (tested with GLM-5.3 Flash and Grok 4.7)</span></li></ul></section>
+
+    <section className="sec" aria-labelledby="proof-title"><h2 id="proof-title">Live proof on NEAR testnet</h2>
+    <ul className="proof">
+      <li><a href="https://testnet.nearblocks.io/txns/78pmYEL4PWZVuVnBNhkZsQAuAUKHZbGV1eK4qgUHJ5yu" target="_blank" rel="noopener noreferrer">Proposal #7 payout: executor sends 0.1 NEAR <em>78pmYEL4… ↗</em></a></li>
+      <li><a href="https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF" target="_blank" rel="noopener noreferrer">Proposal #6 payout: executor sends 0.1 NEAR <em>ogdnYy2S… ↗</em></a></li>
+      <li><a href="https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6" target="_blank" rel="noopener noreferrer">Proposal #5 approved by council vote <em>C4gPFrU9… ↗</em></a></li>
+      <li><a href="https://testnet.nearblocks.io/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u" target="_blank" rel="noopener noreferrer">Non-agent payout attempt rejected (“only agent”) <em>5FA31kak… ↗</em></a></li>
+      <li><a href="https://testnet.nearblocks.io/address/lisdao-demo.sputnikv2.testnet" target="_blank" rel="noopener noreferrer">Demo DAO <em>lisdao-demo.sputnikv2.testnet ↗</em></a></li>
+      <li><a href="https://testnet.nearblocks.io/address/exec.lisdao-v2-1793741346.testnet" target="_blank" rel="noopener noreferrer">Executor contract <em>exec.lisdao-v2-1793741346.testnet ↗</em></a></li></ul></section>
+
+    <section className="sec limits" aria-labelledby="lim-title"><h2 id="lim-title">Honest limits</h2>
+    <ul><li>Testnet only, with one agent account run by a central operator.</li>
+      <li>The live demo agent currently runs on Gemini; NEAR AI Cloud was tested in dry runs.</li>
+      <li>The contract pays the receiver the agent reports; it does not check it against the proposal.</li>
+      <li>No timeout refund yet, and agent tasks are tuned for the demo charity flow.</li></ul></section>
+
+    <footer className="foot"><a className="btn full" href="https://github.com/kaizen-builds/lisdao" target="_blank" rel="noopener noreferrer">View the code on GitHub ↗</a>
+    <p className="hint">Open source · NEAR testnet</p></footer>
+    </main>{toast && <div className="toast">{toast}</div>}</>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
