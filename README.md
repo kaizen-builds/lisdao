@@ -80,24 +80,26 @@ flowchart LR
 ## Quickstart
 ```bash
 # 1. Contract tests (4 tests: happy path + tiers/escalation, and 3 negative tests)
-cd executor && cargo test
+(cd executor && cargo test)
 
-# Build & deploy to testnet (commands below are a guide; not re-run for this README)
-cargo near build                     # wasm lands in target/near/lisdao_executor.wasm
+# Build & deploy to testnet (build checked with cargo-near 0.22 + near-cli-rs 0.30; deploy/init not re-run, they spend testnet NEAR)
+cd executor
+cargo near build non-reproducible-wasm   # wasm lands in target/near/lisdao_executor.wasm
 near deploy <your-exec>.testnet target/near/lisdao_executor.wasm
 # The executor pays the 0.01 NEAR `bond` itself when it escalates, so keep it funded,
 # and the DAO policy must let the executor account add proposals.
 near call <your-exec>.testnet new '{"owner":"you.testnet","agent":"agent.testnet","factory":"sputnikv2.testnet","base_cap":"200000000000000000000000","rep_step":"100000000000000000000000","max_auto":"1000000000000000000000000","bond":"10000000000000000000000"}' --accountId you.testnet
+cd ..
 
 # 2. Web (local: DATABASE_URL optional, in-memory store. Hosted on Vercel: set DATABASE_URL (Neon), the in-memory store does not persist there. Set AGENT_FEED_TOKEN or feed posts are refused)
-cd web && npm ci && cp ../.env.example .env.local && npm run dev
+(cd web && npm ci && cp ../.env.example .env.local && npm run dev)
 
 # 3. Agent (config is read from ~/.lisdao/agent.env; needs the `near` CLI with the agent account's key)
 cd agent && npm ci && pip install playwright && playwright install chromium
 mkdir -p ~/.lisdao && cp ../.env.example ~/.lisdao/agent.env   # then fill in values
-AGENT_PYTHON=$(which python3) ./run-agent.sh   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
+AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
-# To fetch it ahead of time: ./agent/fetch-ocr-data.sh
+# To fetch it ahead of time (from repo root): ./agent/fetch-ocr-data.sh
 
 # 4. Tests: web unit test (rate limiter) and UI checks (Playwright, mocked wallet via ?e2e=1)
 (cd web && npm test)
