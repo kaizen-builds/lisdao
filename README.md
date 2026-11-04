@@ -53,9 +53,9 @@ flowchart LR
 
 ## Security model
 **Enforced on-chain**
-- `dispatch_task` only accepts callers ending in `.sputnikv2.testnet` (accounts only the Sputnik factory can create).
+- `dispatch_task` only accepts callers ending in `.sputnikv2.testnet` (DAOs created by the Sputnik factory; anyone can create one).
 - Only the configured agent account can call `report_payout` / `report_result`; only the owner can change the agent.
-- Payout capped by `max_spend` and the escrow; the DAO's main treasury never leaves Sputnik.
+- Payout capped by `max_spend` and the escrow. Only the escrowed `max_spend` leaves the DAO while a task runs; the rest of the treasury stays in Sputnik. Unused escrow goes back to the DAO on payout, escalation or reported failure.
 - Above-tier amounts are never auto-paid; they go back to a council vote.
 
 **Enforced off-chain (trust the operator)**
@@ -66,7 +66,10 @@ flowchart LR
 <a id="limits"></a>
 **Known limits**
 - Testnet only; single agent account (a central operator); no TEE / attestation of the agent.
-- Any Sputnik DAO can dispatch to the shared executor; reputation is per proposer across all DAOs.
+- The vote does not bind the receiver. `report_payout` pays whatever `receiver_id` the agent reports (up to `max_spend`); the contract does not check it against the proposal. A hostile page could try to steer the agent.
+- Any account under `.sputnikv2.testnet` can dispatch, and anyone can create one; there is no DAO allow-list. Reputation is per proposer across all DAOs, so it can be raised in a throwaway DAO.
+- No timeout refund: only the agent can settle a task. If the agent stops, the escrow stays in the executor until it reports. The owner (a single key) can swap the agent with `set_agent`.
+- Payout transfers have no callback: if a transfer fails, the task is still marked `Executed` and the refunded amount lands back in the executor, not the DAO.
 - Agent tasks are tuned for the demo charity flow, not arbitrary websites.
 - `legacy/contract/` is an earlier all-in-one DAO prototype, not used by the web app.
 
@@ -79,9 +82,11 @@ cd executor && cargo test
 # Build & deploy to testnet (commands below are a guide; not re-run for this README)
 cargo near build                     # wasm lands in target/near/lisdao_executor.wasm
 near deploy <your-exec>.testnet target/near/lisdao_executor.wasm
+# The executor pays the 0.01 NEAR `bond` itself when it escalates, so keep it funded,
+# and the DAO policy must let the executor account add proposals.
 near call <your-exec>.testnet new '{"owner":"you.testnet","agent":"agent.testnet","factory":"sputnikv2.testnet","base_cap":"200000000000000000000000","rep_step":"100000000000000000000000","max_auto":"1000000000000000000000000","bond":"10000000000000000000000"}' --accountId you.testnet
 
-# 2. Web (DATABASE_URL optional: in-memory store without it; set AGENT_FEED_TOKEN or feed posts are refused)
+# 2. Web (local: DATABASE_URL optional, in-memory store. Hosted on Vercel: set DATABASE_URL (Neon), the in-memory store does not persist there. Set AGENT_FEED_TOKEN or feed posts are refused)
 cd web && npm ci && cp ../.env.example .env.local && npm run dev
 
 # 3. Agent (config is read from ~/.lisdao/agent.env; needs the `near` CLI with the agent account's key)
@@ -111,6 +116,7 @@ python web/e2e-buttons.py http://localhost:3000   # base URL argument
 - **Security:** spending caps, escrow and escalation enforced by the contract, with limits stated plainly.
 
 ## Roadmap
+See [docs/ROADMAP.md](docs/ROADMAP.md) for proposed contract fixes (not deployed).
 - Verifiable agent (TEE / NEAR AI) so the reported address is attested.
 - Per-DAO executor config and allow-lists of task sites.
 - Multiple agents with stake/slashing.

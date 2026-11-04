@@ -17,7 +17,12 @@ LisDao is a hackathon project on **NEAR testnet**. It has not been audited. Do n
 - **LLM fallback.** If the vision LLM fails, a scripted planner (tuned for the demo charity page) does the step, labelled `[scripted]`/"scripted fallback" in the feed.
 
 ## Other limits
-- Any Sputnik DAO can dispatch to the shared executor; reputation is per proposer across all DAOs.
+- **Receiver not bound by the vote.** `report_payout` (`executor/src/lib.rs:85-104`) pays the agent's `receiver_id` with no check against the proposal. In `agent/browser_agent.py:177` the agent falls back to the first account-like string in the page text if the LLM's address is not found there, so page content decides the receiver.
+- **Open dispatch, global reputation.** The only caller check is the `.sputnikv2.testnet` suffix (`lib.rs:73`); anyone can create such a DAO. Reputation is keyed by proposer only (`lib.rs:55,99-100`), so it can be farmed in a throwaway DAO. Any such DAO can also send task text to the agent's browser.
+- **Escrow can stick.** There is no timeout or cancel. Only the agent settles (`lib.rs:86,119`); the owner, a single account, can replace it (`lib.rs:128`).
+- **No transfer callback.** Status is set before the transfer (`lib.rs:96,102`). If the receiver transfer fails, the task still reads `Executed` and the NEAR returns to the executor, not the DAO. If the escalation `add_proposal` fails, that batch (`lib.rs:112-113`) reverts and the escrow also stays in the executor.
+- **Escrow vs treasury.** While a task runs, `max_spend` sits in the executor; the rest of the treasury stays in Sputnik.
+- **Feed.** Feed text is rendered by React as plain text (no `dangerouslySetInnerHTML` in `web/`). The token is compared in constant time (`web/lib/token.js`). Reads are public.
 - Agent tasks are tuned for the demo charity flow, not arbitrary websites.
 - `legacy/contract/` is an unused earlier prototype and is not deployed by the app.
 
