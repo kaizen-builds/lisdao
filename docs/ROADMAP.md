@@ -1,5 +1,7 @@
 # Proposed contract fixes (NOT deployed)
 
+Known limits these fix, in the deployed executor: the receiver is not bound by the vote (fix 1), dispatch is open to any `.sputnikv2.testnet` DAO (fix 2), there is no timeout or cancel for stuck escrow (fix 3), and payout transfers have no callback (fix 4).
+
 None of this is in the deployed executor `exec.lisdao-v2-1793741346.testnet`. It runs the code described in [SECURITY.md](SECURITY.md).
 
 1. **Bind the receiver.** Add `receiver: Option<AccountId>` (or a receiver prefix/allow-list) to `dispatch_task` args, so it is part of what the council votes on; `report_payout` requires `receiver_id` to match.

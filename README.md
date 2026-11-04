@@ -47,6 +47,7 @@ flowchart LR
 | Proposal #5 approved by council (VoteApprove → dispatches task 4; payout tx not recorded) | [C4gPFrU9…](https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6) |
 | Proposal #6 created | [2h7V8Jk5…](https://testnet.nearblocks.io/txns/2h7V8Jk51PhX9Br7Z14iM6zekUEAmE5opCrE3M8HZLeK) |
 | Proposal #6 payout: agent calls `report_payout`, contract sends 0.1 NEAR to a one-time demo-charity address | [ogdnYy2S…](https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF) |
+| Proposal #7 payout: agent calls `report_payout`, contract sends 0.1 NEAR to a one-time demo-charity address | [78pmYEL4…](https://testnet.nearblocks.io/txns/78pmYEL4PWZVuVnBNhkZsQAuAUKHZbGV1eK4qgUHJ5yu) |
 | Access control (deliberate negative test): `report_payout` from non-agent test account `lisdao-voter-1793741346.testnet` → fails `only agent`, nothing moves | [5FA31kak…](https://testnet.nearblocks.io/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u) |
 | Earlier: task dispatch + 0.1 NEAR payout | [68niAobb…](https://testnet.nearblocks.io/txns/68niAobbxYkYjhdRdPVU6m2AXsaGH5REbXJfSCHkrdSj), [31bQmyYa…](https://testnet.nearblocks.io/txns/31bQmyYaWd6XfvAkHoY2ey2BQzv9H7rqwA359YGPvhHb) |
 | Earlier: 0.5 NEAR above tier → escalated | [6nEvYNDs…](https://testnet.nearblocks.io/txns/6nEvYNDs8FBcFn4TZi9YcXBxWbPAua9Zc3bZF65VzQNr) |
@@ -60,6 +61,7 @@ flowchart LR
 
 **Enforced off-chain (trust the operator)**
 - The agent's reading of the payout address. The contract trusts *which* address the agent reports (within the cap). OCR + page-text matching reduce, not remove, this risk.
+- `POST /api/charity` (demo charity) is rate limited per IP (5/min) with a global cap (60/min); over the limit it returns 429. The limiter is in memory per server instance, so it slows spam but is not a hard guarantee.
 - Feed and heartbeat posts (`/api/agent`, `/api/heartbeat`) require the `x-agent-token` header to match `AGENT_FEED_TOKEN`; if the variable is not set, the server refuses all posts (503). Reads are public.
 - If the vision LLM is unavailable, a scripted planner runs that step, labelled `[scripted]` in the feed.
 
@@ -97,8 +99,10 @@ AGENT_PYTHON=$(which python3) ./run-agent.sh   # any OpenAI-compatible vision en
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
 # To fetch it ahead of time: ./agent/fetch-ocr-data.sh
 
-# 4. UI checks (Playwright)
-python web/e2e-buttons.py http://localhost:3000   # base URL argument
+# 4. Tests: web unit test (rate limiter) and UI checks (Playwright, mocked wallet via ?e2e=1)
+(cd web && npm test)
+pip install playwright && playwright install chromium
+python web/e2e-buttons.py http://localhost:3000/   # from repo root, against a running web app
 ```
 
 ## Repo map
