@@ -221,9 +221,9 @@ export default function Home() {
     <p className="pill" aria-label="Built on">Built on <b>NEAR</b> · <b>Sputnik DAO</b> · <b>NEAR AI Cloud</b></p>
 
     <section className="sec" id="how" aria-labelledby="how-title"><h2 id="how-title">How it works</h2><ol className="steps">
-      <li className="box"><VoteArt /><span className="num">1</span><h3>The community votes</h3><p>A task is a normal Sputnik DAO proposal. In the demo DAO only council wallets vote.</p></li>
-      <li className="box"><WorkArt /><span className="num">2</span><h3>The agent works</h3><p>It opens a real browser and does the task. You watch each step.</p></li>
-      <li className="box"><PayArt /><span className="num">3</span><h3>The contract pays</h3><p>Small payouts go through. Big ones go back to a vote.</p></li></ol></section>
+      <li className="box"><VoteArt /><span className="num">1</span><h3>The community votes</h3><p>Propose a task in plain words, like donating 0.1 NEAR to the water project. In the demo DAO one council vote passes it; with more members it's a normal vote.</p></li>
+      <li className="box"><WorkArt /><span className="num">2</span><h3>The agent works</h3><p>It controls a real browser, reads screenshots with NEAR AI Cloud, and clicks through to the one-time deposit address. Watch every highlighted click in the Live browser view.</p></li>
+      <li className="box"><PayArt /><span className="num">3</span><h3>The contract pays</h3><p>The contract sends the funds on-chain. Small payouts go through; big ones go back to a vote.</p></li></ol></section>
 
     <section className="sec" id="proof" aria-labelledby="proof-title"><h2 id="proof-title">Proof: proposal #9</h2>
       <div className="box proof"><p className="q">“Donate 0.1 NEAR to the water project”</p>

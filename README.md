@@ -10,6 +10,18 @@
 ## What it is
 LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent. The live demo agent runs on **NEAR AI Cloud** (`x-ai/grok-4.7`); proposal #9 was completed end to end with it. A run with the cheaper `z-ai/glm-5.3-flash` (proposal #8) failed safely: it misread one character of the deposit address and the exact-match check refused to pay.
 
+## The flow (what the demo shows)
+Some charities take crypto only through a web page that generates a fresh deposit address for each donation, so a DAO can't pay them with a plain on-chain transfer. LisDao lets the DAO do it:
+1. **Create a proposal** in the app (the form starts empty), e.g. "Donate 0.1 NEAR to the water project".
+2. **Vote yes.** In the demo DAO the council wallet passes it immediately; with more members it is a normal Sputnik vote.
+3. **The agent controls a real browser.** It feeds screenshots to the LLM (NEAR AI Cloud, `x-ai/grok-4.7`), which picks each click. Clicks are highlighted with numbered orange rings. It handles things like clearing a prefilled amount box before typing the new amount, and after each action it checks a fresh screenshot to confirm the step worked.
+4. **It reaches the page with the one-time deposit address**, which is checked against page text and OCR.
+5. **The contract pays on-chain**, within the proposer's spending limit (bigger amounts go back to a DAO vote).
+
+The app's **Live browser** panel shows the agent's run as it happens: a browser frame with the real URL, the latest screenshot, and a step list with thumbnails. `scripts/record-run.sh` records a dry run of the agent's browser (video + one PNG per step) without moving any money.
+
+The agent is run by one operator, and it can't vote or take the treasury; see [limits](#limits).
+
 ## How it works
 ```mermaid
 flowchart LR
