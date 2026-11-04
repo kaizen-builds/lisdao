@@ -51,6 +51,13 @@ function Agent({ dao, p, onClose }) {
     <div style={{ padding: 10 }}><button className="btn full" onClick={onClose}>Close</button></div></div>;
 }
 
+const STAGES = ["Demo", "Proposal", "Vote", "Agent", "Paid"];
+function Stepper({ at }) {
+  return <div className="stepper" aria-label="Progress">{STAGES.map((n, i) =>
+    <div key={n} className={"st" + (i < at || at >= STAGES.length ? " done" : "") + (i === Math.min(at, STAGES.length - 1) ? " now" : "")}><span>{i < at ? "✓" : i + 1}</span><em>{n}</em></div>)}</div>;
+}
+const Next = ({ children }) => <div className="next fade">→ {children}</div>;
+
 export default function Home() {
   const [sel, setSel] = useState(); const [modal, setModal] = useState(); const [acct, setAcct] = useState();
   const [daos, setDaos] = useState([]); const [cur, setCur] = useState(null); const [props, setProps] = useState([]);
@@ -59,14 +66,16 @@ export default function Home() {
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
   const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "", desc: "" });
 
-  useEffect(() => { (async () => {
-    const q = new URLSearchParams(location.search);
+  useEffect(() => { const q = new URLSearchParams(location.search);
+    (async () => {
     try {
       await load();
       if (q.get("dao")) { const d = +q.get("dao"); await open(d); if (q.get("p")) await showP(d, +q.get("p")); }
       if (q.get("pane")) setPane(q.get("pane")); if (q.get("agent")) setAgent(true);
     } catch (e) { console.error("init", e); }
     setReady(true);
+    })();
+    (async () => {
     if (q.get("e2e")) { // test mode: fake connected wallet that records txs instead of sending
       window.__txs = []; const fake = { wallet: async () => ({ signAndSendTransaction: async t => { window.__txs.push(t); return {}; } }), disconnect: async () => {} };
       setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); return;
@@ -121,9 +130,14 @@ export default function Home() {
         <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
 
   if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
-    <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><div className="muted">Select a DAO to continue:</div>
-    <button className="btn full big" onClick={() => open(0)}>Demo DAO</button>
-    <button className="btn p full big" onClick={() => setPane("create-dao")}>Create New DAO</button></div>{toast && <div className="toast">{toast}</div>}</>;
+    <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><p className="pitch">A DAO whose AI agent does real-world tasks after members vote.</p>
+    <ol className="how">
+      <li style={{ animationDelay: ".05s" }}><b>1</b>Vote on a task</li>
+      <li style={{ animationDelay: ".15s" }}><b>2</b>The agent does it in a real browser</li>
+      <li style={{ animationDelay: ".25s" }}><b>3</b>The DAO pays automatically</li></ol>
+    <button className="btn p full big glow" onClick={() => open(0)}>Demo DAO</button>
+    <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
+    <button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button></div>{toast && <div className="toast">{toast}</div>}</>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
@@ -141,8 +155,10 @@ export default function Home() {
   const used = votes.length ? votes.reduce((s, [a]) => s + (dao.members.find(m => m[0] === a)?.[1] || 0), 0) : 0;
   const myW = dao.members.find(m => m[0] === acct)?.[1] || 0;
   const pct = p ? Math.round(100 * p.yes / dao.total_weight) : 0;
+  const stage = pane === "create" ? 1 : pane === "proposal" && p ? ({ Active: 2, Approved: 2, Executing: 3, Executed: 5, Failed: 3, Rejected: 2 }[p.status] ?? 2) : 0;
 
   return <>{nav}{toast && <div className="toast">{toast}</div>}{agent && p && <Agent dao={dao} p={p} onClose={() => { setAgent(false); setDismissed(pid); }} />}
+    <div className="wrap"><Stepper at={stage} /></div>
     <div className="grid">
       <div className="panel">
         <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(+e.target.value)} aria-label="Switch DAO">
@@ -155,6 +171,7 @@ export default function Home() {
       </div>
       <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
+          <Next>Create a proposal to start <button className="btn p sm" onClick={() => setPane("create")}>Create proposal</button></Next>
           <h2>Summary</h2>
           {[["Name", dao.name], ["Created At", "DAO #" + dao.id + " on NEAR testnet"], ["Creator Account", dao.owner], ["Balance in NEAR", yocto(dao.treasury)], ["Agent", dao.agent], ["Quorum", dao.quorum_pct + "%"]]
             .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}
@@ -167,6 +184,7 @@ export default function Home() {
           </tbody></table></>}
         {pane === "create" && <>
           <div className="row"><h2>Create Proposal</h2><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
+          <Next>Describe the task in plain English, then create it</Next>
           <div className="seg"><button className={"btn" + (f.kind !== "transfer" ? " p" : "")} onClick={() => setF({ ...f, kind: "agent" })}>AI agent task</button>
             <button className={"btn" + (f.kind === "transfer" ? " p" : "")} onClick={() => setF({ ...f, kind: "transfer" })}>Send NEAR</button></div>
           <label>Proposal Title</label><input placeholder="Donate to the water project" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} />
@@ -192,6 +210,10 @@ export default function Home() {
               setProps(ps => ps.some(x => x.id === n) ? ps : [...ps, optimistic]); setPid(n); setVotes([]); setPane("proposal"); } }}>{busy ? "Creating..." : "Create Proposal"}</button></>}
         {pane === "proposal" && p && <>
           <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1><button className="btn sm" onClick={() => setPane("summary")}>← Back</button></div>
+          {p.status === "Active" && <Next>{votes.some(v => v[0] === acct) ? "Waiting for more Yes votes" : "Vote Yes to send it to the agent"}</Next>}
+          {p.status === "Executing" && <Next><span className="pulse" /> The agent is working…</Next>}
+          {p.status === "Executed" && <Next>Done. The DAO paid on-chain {p.result && <span className="muted"> · see receipt below</span>}</Next>}
+          {p.status === "Approved" && <Next>Passed. Execute the transfer</Next>}
           <p className="muted">{p.action.AgentTask ? `${p.action.AgentTask.instructions} · cap ${yocto(p.action.AgentTask.max_spend)} NEAR` : `Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
           <div className="panel" style={{ background: "#FFFBF7", boxShadow: "none", border: "1px solid var(--line)" }}>
             {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing in browser" : p.status === "Executed" ? "Passed · Executed" : p.status],
