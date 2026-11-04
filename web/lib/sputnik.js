@@ -4,18 +4,16 @@ export const FACTORY = "sputnikv2.testnet";
 export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_ID || "exec.lisdao-v2-1793741346.testnet";
 export const DEMO_SPUTNIK = process.env.NEXT_PUBLIC_SPUTNIK_DAO || "lisdao-demo.sputnikv2.testnet";
 export const FEED_DAO = 9000; // live feed key for executor tasks
-export const RPCS = ["https://rpc.testnet.near.org", "https://test.rpc.fastnear.com"];
-let rpcI = 0;
-// Try each testnet RPC (6 s timeout each), up to 2 rounds; log real errors, throw only if all fail.
+// All browser reads go through our same-origin /api/rpc proxy (no CORS, server-side RPC fallback).
 export async function rpcCall(method, params) {
   const errs = [];
-  for (let i = 0; i < RPCS.length * 2; i++) {
-    const url = RPCS[(rpcI + i) % RPCS.length]; const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 6000);
+  for (let i = 0; i < 3; i++) {
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 14000);
     try {
-      const r = await fetch(url, { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
-      const j = await r.json(); if (j.error || j.result?.error) { const e = new Error(JSON.stringify(j.error || j.result.error)); e.rpc = true; throw e; }
-      rpcI = (rpcI + i) % RPCS.length; return j.result;
-    } catch (e) { errs.push(url + ": " + (e?.message || e)); if (e.rpc && i >= 1) break; } finally { clearTimeout(to); }
+      const r = await fetch("/api/rpc", { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ method, params }) });
+      const j = await r.json(); if (j.error || j.result?.error) { const e = new Error(JSON.stringify(j.error || j.result.error)); e.rpc = r.ok; throw e; }
+      return j.result;
+    } catch (e) { errs.push(String(e?.message || e)); if (e.rpc) break; await new Promise(r => setTimeout(r, 500 * (i + 1))); } finally { clearTimeout(to); }
   }
   console.error("NEAR RPC failed", method, errs); throw new Error(errs[errs.length - 1]);
 }

@@ -1,30 +1,17 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Drop, Wordmark } from "./Logo";
-import { loadSputnik, isSputnik, viewAt, DEMO_SPUTNIK, EXECUTOR, FACTORY } from "../lib/sputnik";
+import { loadSputnik, isSputnik, viewAt, rpcCall, DEMO_SPUTNIK, EXECUTOR, FACTORY } from "../lib/sputnik";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
 const AGENT = process.env.NEXT_PUBLIC_AGENT_ID || "lisdao-agent-1793741346.testnet";
-const RPCS = ["https://test.rpc.fastnear.com", "https://rpc.testnet.near.org"];
-let rpcI = 0;
-async function view(method, args = {}) {
-  for (let i = 0; ; i++) { try { return await view1(method, args); } catch (e) { if (i > 2) throw e; await new Promise(r => setTimeout(r, 800)); } }
-}
-async function view1(method, args) {
-  const url = RPCS[rpcI % RPCS.length]; const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 6000);
-  try {
-    const r = await fetch(url, { method: "POST", signal: ctl.signal, headers: { "Content-Type": "application/json" }, body: JSON.stringify({
-      jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "call_function", finality: "optimistic",
-        account_id: CONTRACT, method_name: method, args_base64: btoa(JSON.stringify(args)) } }) });
-    const j = await r.json(); if (j.error || j.result?.error) throw new Error(JSON.stringify(j.error || j.result.error));
-    return JSON.parse(new TextDecoder().decode(new Uint8Array(j.result.result)));
-  } catch (e) { rpcI++; throw e; } finally { clearTimeout(to); }
-}
+async function view(method, args = {}) { return viewAt(CONTRACT, method, args); }
+const withTimeout = (pr, ms, msg) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 // Ask the RPC for the final outcome of a tx; throws with the on-chain error if any action or receipt failed.
 async function verifyTx(hash, sender) {
   for (let i = 0; i < 20; i++) {
-    for (const u of RPCS) { try {
-      const j = await (await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "EXPERIMENTAL_tx_status", params: { tx_hash: hash, sender_account_id: sender, wait_until: "EXECUTED_OPTIMISTIC" } }) })).json();
+    { try {
+      const j = { result: await rpcCall("EXPERIMENTAL_tx_status", { tx_hash: hash, sender_account_id: sender, wait_until: "EXECUTED_OPTIMISTIC" }) };
       if (j.result) { const bad = [j.result.transaction_outcome, ...(j.result.receipts_outcome || [])].map(o => o.outcome.status).find(st => st && st.Failure);
         if (j.result.status?.Failure || bad) throw new Error("ONCHAIN:" + JSON.stringify(j.result.status?.Failure || bad.Failure).slice(0, 160));
         if (j.result.status?.SuccessValue !== undefined || j.result.status?.SuccessReceiptId) return true; }
@@ -84,7 +71,7 @@ export default function Home() {
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
   const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "Donate to the water project", desc: "Donate 0.1 NEAR to the water project", amt: "0.1" });
-  const [lastTx, setLastTx] = useState(null); const [err, setErr] = useState(""); const [adv, setAdv] = useState(false);
+  const [lastTx, setLastTx] = useState(null); const [err, setErr] = useState(""); const [phase, setPhase] = useState(""); const [adv, setAdv] = useState(false);
   const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null); const [bal, setBal] = useState(null);
 
   useEffect(() => { const q = new URLSearchParams(location.search);
@@ -98,7 +85,7 @@ export default function Home() {
     })();
     (async () => {
     if (q.get("e2e")) { // test mode: fake connected wallet that records txs instead of sending
-      window.__txs = []; const fake = { wallet: async () => ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }), disconnect: async () => {} };
+      window.__txs = []; const fake = { wallet: async () => { if (q.get("e2e") === "dead") throw new Error("No accounts found"); return ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }); }, disconnect: async () => {} };
       setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); return;
     }
     const { NearConnector } = await import("@hot-labs/near-connect");
@@ -115,8 +102,9 @@ export default function Home() {
   useEffect(() => { const x = props.find(q => q.id === pid); if (x && x.status === "Executing" && pane === "proposal" && dismissed !== pid) setAgent(true); }, [props, pid, pane, dismissed]);
   useEffect(() => { if (pane !== "create-dao" || !acct) return; setBal(null);
     if (acct === "e2e-user.testnet") { setBal(3); return; }
-    (async () => { for (const u of RPCS) { try { const r = await (await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "query", params: { request_type: "view_account", finality: "final", account_id: acct } }) })).json();
-      if (r.result) return setBal(Number(BigInt(r.result.amount) / 10n ** 20n) / 1e4); } catch {} } })(); }, [pane, acct]);
+    rpcCall("query", { request_type: "view_account", finality: "final", account_id: acct }).then(r => setBal(Number(BigInt(r.amount) / 10n ** 20n) / 1e4)).catch(() => {}); }, [pane, acct]);
+  const live = useRef(null); // live connector wallet, fetched as soon as an account is known so a click can sign without slow awaits
+  useEffect(() => { live.current = null; if (!acct || !sel) return; sel.wallet().then(w => { live.current = w; }).catch(e => console.warn("wallet warmup", e)); }, [acct, sel]);
   async function load() { for (let i = 0; i < 4; i++) { try { setDaos(await view("list_daos")); return; } catch (e) { await new Promise(r => setTimeout(r, 500 * (i + 1))); } } }
   async function loadS(id) { const r = await loadSputnik(id, { policy: pol.current?.[id] }); pol.current = { ...pol.current, [id]: r.policy };
     setSdao(r.dao); setProps(old => [...r.props, ...old.filter(x => x.optimistic && !r.props.some(y => y.id === x.id))]); return r; } // optimistic rows only exist in e2e test mode
@@ -125,7 +113,7 @@ export default function Home() {
   async function open(id) {
     if (isSputnik(id)) { setCur(id); setPane("summary"); setLoadingP(true); setProps([]); try { await loadS(id); } catch (e) { flash("Could not load that Sputnik DAO"); } finally { setLoadingP(false); } return; }
     setCur(id); setPane("summary"); setLoadingP(true); try { setProps(await view("get_proposals", { dao_id: id })); } finally { setLoadingP(false); } }
-  async function showP(d, p) { setPid(p); setPane("proposal"); if (isSputnik(d)) return; setVotes(await view("get_votes", { dao_id: d, proposal_id: p })); }
+  async function showP(d, p) { setPid(p); setPane("proposal"); setErr(""); if (isSputnik(d)) return; setVotes(await view("get_votes", { dao_id: d, proposal_id: p })); }
   function flash(m) { setToast(m); setTimeout(() => setToast(""), 2500); }
   async function voteNo(d, x, w) {
     if (!acct) return modal.show();
@@ -138,7 +126,7 @@ export default function Home() {
     const snap = props;
     const e2e = acct === "e2e-user.testnet";
     if (x.optimistic && !e2e) return flash("This proposal is not on-chain yet");
-    if (d.sputnik) { const onchain = e2e ? true : await viewAt(d.id, "get_proposal", { id: x.id }).catch(() => null); if (!onchain) return flash("That proposal does not exist on-chain");
+    if (d.sputnik) { if (!e2e && !props.some(q => q.id === x.id && !q.optimistic)) return flash("That proposal does not exist on-chain");
       if (!(await call("act_proposal", { id: x.id, action: "VoteApprove", proposal: x.kind }, "0", d.id, "300000000000000"))) setProps(snap); else flash("Vote recorded in the Sputnik DAO"); return; }
     setProps(ps => ps.map(q => q.id === x.id ? { ...q, yes: q.yes + w, status: (q.yes + w) * 100 >= d.total_weight * d.quorum_pct ? (q.action.AgentTask ? "Executing" : "Approved") : q.status } : q));
     setVotes(v => [...v, [acct, true]]);
@@ -152,13 +140,17 @@ export default function Home() {
   async function call(methodName, args, deposit, receiverId = CONTRACT, gas = "100000000000000") {
     if (!acct) { modal?.show(); return false; }
     setBusy(true);
-    try { const w = await sel.wallet();
-      const res = await w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] });
+    setErr(""); setPhase("wallet");
+    try { let w;
+      try { w = live.current || await withTimeout(sel.wallet(), 8000, "no wallet"); live.current = w; }
+      catch (e) { console.error("wallet session", e); setErr("Wallet session expired, reconnect"); flash("Wallet session expired, reconnect"); setAcct(undefined); modal?.show(); return false; }
+      const res = await withTimeout(w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] }), 60000, "WALLET_TIMEOUT");
       const h = txHash(res); if (!h) throw new Error("The wallet did not send a transaction");
-      if (h !== "e2e") await verifyTx(h, acct);
-      setLastTx(h); await refresh(); return h;
-    } catch (e) { const m = String(e?.message || e); setErr(""); flash(m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : m.includes("reject") || m.includes("cancel") ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 80)); return false; }
-    finally { setBusy(false); }
+      setPhase("confirm"); if (h !== "e2e") await verifyTx(h, acct);
+      setLastTx(h); refresh(); return h;
+    } catch (e) { console.error("tx", e); const m = String(e?.message || e); const msg = m === "WALLET_TIMEOUT" ? "Wallet did not respond. Open your wallet and try again." : m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : /reject|cancel|closed|denied/i.test(m) ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 100);
+      setErr(msg); flash(msg); return false; }
+    finally { setBusy(false); setPhase(""); }
   }
   const dao = isSputnik(cur) ? (sdao?.id === cur ? sdao : null) : daos.find(d => d.id === cur); const p = props.find(x => x.id === pid);
 
@@ -273,8 +265,7 @@ export default function Home() {
             const n = props.length;
             let sent, kind, last;
             if (dao.sputnik) {
-              try { last = await viewAt(dao.id, "get_last_proposal_id"); } catch (e) { console.error("get_last_proposal_id", e);
-                const ids = props.filter(x => !x.optimistic).map(x => x.id); if (!ids.length) return setErr("Could not reach NEAR RPC, try again"); last = Math.max(...ids) + 1; }
+              const ids = props.filter(x => !x.optimistic).map(x => x.id); last = ids.length ? Math.max(...ids) + 1 : 0; // chain list, polled every 1.5 s; no await so the wallet popup keeps the click's user gesture
               kind = action.Transfer ? { Transfer: { token_id: "", receiver_id: action.Transfer.receiver_id, amount: action.Transfer.amount } }
                 : { FunctionCall: { receiver_id: EXECUTOR, actions: [{ method_name: "dispatch_task", deposit: action.AgentTask.max_spend, gas: "50000000000000",
                     args: btoa(JSON.stringify({ title, instructions: action.AgentTask.instructions, max_spend: action.AgentTask.max_spend, proposer: acct, proposal_id: last })) }] } };
@@ -283,7 +274,7 @@ export default function Home() {
             if (sent) { const id = dao.sputnik ? last : n;
               if (sent === "e2e") { setProps(ps => [...ps, { id, proposer: acct, title, action, kind, yes: 0, no: 0, votes: [], status: "Active", deadline_ns: String(BigInt(Date.now()) * 1000000n + BigInt(dao.voting_period_ns)), result: null, optimistic: true }]); }
               else if (dao.sputnik) { const ok = await viewAt(dao.id, "get_proposal", { id }).catch(() => null); if (!ok) return setErr("The transaction went through but no proposal appeared on-chain"); await loadS(dao.id); }
-              flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{busy ? "Submitting..." : "Submit proposal"}</button></>}
+              flash("Proposal created on-chain"); setPid(id); setVotes([]); setPane("proposal"); } }}>{phase === "wallet" ? "Waiting for wallet…" : phase === "confirm" ? "Confirming on NEAR…" : busy ? "Checking…" : "Submit proposal"}</button></>}
         {pane === "proposal" && p && <>
           <div className="row"><h1 style={{ marginTop: 0 }}>{p.title}</h1></div>
           {p.status === "Escalated" && <Next>Above the auto-approve tier. Council: vote on the new Transfer proposal</Next>}
@@ -299,8 +290,9 @@ export default function Home() {
           </div>
           <div className="row" style={{ margin: "20px 0" }}><b>Progress: {p.yes} / {goal} votes{dao.sputnik ? " needed" : ""}</b><div className="bar"><i style={{ width: pct + "%" }} /></div><span>{pct}%</span></div>
           {p.status === "Active" && (votes2.some(v => v[0] === acct) ? <div className="receipt">You voted. Waiting for others…</div> : <>
-            <button className="btn p full big" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{busy ? "Voting..." : "Vote Yes"}</button>
+            <button className="btn p full big" disabled={busy} onClick={() => vote(dao, p, myW || 1)}>{phase === "wallet" ? "Waiting for wallet…" : phase === "confirm" ? "Confirming on NEAR…" : "Vote Yes"}</button>
             <button className="btn full" style={{ marginTop: 8 }} disabled={busy} onClick={() => voteNo(dao, p, myW || 1)}>Vote No</button></>)}
+          {err && <div className="warn" role="alert">{err}</div>}
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
           {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && !agent && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>View Agent Execution</button>}
           <div className="muted" style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank">View transaction ↗</a>}
