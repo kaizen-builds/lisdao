@@ -1,102 +1,122 @@
-# LisDao
+<h1 align="center">LisDao</h1>
+<p align="center"><strong>Your community votes. An AI agent does the job in a real browser. A NEAR contract pays, within limits the DAO sets.</strong></p>
+<p align="center">
+  <a href="https://lisdao.vercel.app"><strong>Live app ↗</strong></a> · Demo video (demo video link coming) · <a href="#proof">On-chain proof</a> · <a href="#quickstart">Run it</a> · <a href="#limits">What it does not do yet</a>
+</p>
+<p align="center"><sub>NEAR TESTNET · SPUTNIK DAO v2 · RUST (near-sdk 5) · NEXT.JS 15 · PLAYWRIGHT · Built at NEAR HACKATHON</sub></p>
 
-**An AI executor for Sputnik DAO: the council votes in plain English, an AI agent carries out the result in a real web browser, and NEAR pays out under caps the contract enforces.**
+> **Testnet only.** No mainnet deployment and no real money. The "Water Project" charity is a demo page in this repo.
 
-LisDao is built on **Sputnik DAO v2**, NEAR's standard DAO contract. The money and the votes stay in the Sputnik DAO. We don't rebuild the multisig. LisDao adds what a community does with it: a proposal such as "Donate 0.1 NEAR to the water project" becomes a normal Sputnik `FunctionCall` proposal. When the council approves it, Sputnik itself calls the LisDao executor and escrows exactly the approved spending cap. An AI agent opens a real browser, works through the charity's donation page and reads the one-time deposit address. Then the executor contract pays, never the agent.
+## What it is
+LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent.
 
-LisDao started as my own EVM idea. All code in this repo is new, written for NEAR during the hackathon window.
-
-- **Live demo:** https://lisdao.vercel.app (NEAR testnet)
-- **Demo video:** _coming soon (X post link)_
-
-## What LisDao adds on top of Sputnik DAO
-
-| Feature | How it works |
-| --- | --- |
-| **AI executor** | `dispatch_task` on `exec.lisdao-v2-1793741346.testnet` can only be called by a Sputnik DAO (an account under `sputnikv2.testnet`). That happens only when the council passes the proposal. |
-| **Contract-enforced spending cap** | The DAO attaches `max_spend` as escrow. The agent can only report an address. `report_payout` rejects any amount above the cap or the escrow, and any caller other than the agent. Leftover escrow goes back to the DAO. |
-| **Payout tiers (programmable approvals)** | A payout within the proposer's auto-approve tier is paid at once. Anything above it is **escalated**: the escrow returns to the DAO and the executor opens a normal Sputnik `Transfer` proposal, which the council votes on as usual. |
-| **Reputation-based access** | Every finished task raises the proposer's reputation by 1, and each point raises their tier: 0.2 NEAR base + 0.1 NEAR per point, up to 1 NEAR. |
-| **Works with any Sputnik DAO** | Any Sputnik DAO on testnet can use the executor. Create one from the app, or open an existing one with **Open my Sputnik DAO**. |
-
-## Try it in two minutes
-
-| Step | What to do | What you should see |
-| --- | --- | --- |
-| 1 | Open https://lisdao.vercel.app | The pitch, three steps, and **Demo DAO** |
-| 2 | Tap **Demo DAO** | The Sputnik DAO `lisdao-demo.sputnikv2.testnet`: balance, council, "Votes needed: 1 of 2 council", AI executor, your auto-approve tier |
-| 3 | Connect a testnet wallet on the council and tap **Create New Proposal** | One wallet transaction: Sputnik `add_proposal` (0.01 NEAR bond) with a `FunctionCall` to the executor |
-| 4 | Tap **Vote Yes** | Sputnik `act_proposal VoteApprove`. The proposal passes, Sputnik calls the executor, and the live agent panel opens |
-| 5 | Watch the panel | Browser screenshots and steps, then "paid by the LisDao executor from the DAO’s escrow" with a nearblocks link, in about 20 seconds |
-| 6 | Open "Donate 0.5 NEAR…" | An example above the tier: the executor opened a Sputnik Transfer proposal ("LisDao task #1…") for the council |
-
-## What is real, with receipts (NEAR testnet)
-
-| Claim | Receipt |
-| --- | --- |
-| Sputnik DAO created with the `sputnikv2.testnet` factory | [lisdao-demo.sputnikv2.testnet](https://testnet.nearblocks.io/address/lisdao-demo.sputnikv2.testnet) |
-| LisDao executor contract | [exec.lisdao-v2-1793741346.testnet](https://testnet.nearblocks.io/address/exec.lisdao-v2-1793741346.testnet) |
-| AI task proposed in Sputnik (FunctionCall to the executor) | [HcdiwXF5…](https://testnet.nearblocks.io/txns/HcdiwXF5CS48KBjKcnZApjGqDU9w5LVjfNN72QLBedN1), [81SU59HM…](https://testnet.nearblocks.io/txns/81SU59HMkEcz6KRtXbw49XCsoAKkSxEEqnyWvQfPdU29) |
-| Council vote passes it, and Sputnik dispatches the task and escrows the cap | [68niAobb…](https://testnet.nearblocks.io/txns/68niAobbxYkYjhdRdPVU6m2AXsaGH5REbXJfSCHkrdSj), [Azz5hwRX…](https://testnet.nearblocks.io/txns/Azz5hwRXdi7uC7hBdFd43EjERSkrhJsnCxcoMo347wcf) |
-| Agent reports the address; the executor pays 0.1 NEAR | [31bQmyYa…](https://testnet.nearblocks.io/txns/31bQmyYaWd6XfvAkHoY2ey2BQzv9H7rqwA359YGPvhHb), [J2TjSVJD…](https://testnet.nearblocks.io/txns/J2TjSVJDL2riAS8HKVeZ1T1cJJygHJmTSipmvZkNCpjN) |
-| 0.5 NEAR task above the tier escalated to a Sputnik Transfer proposal | proposal [H8TUW3pB…](https://testnet.nearblocks.io/txns/H8TUW3pBL4DPjNsDrDHkPMm6A3T6G7nQKoWLwQ2tJuQ4), vote [AVb82LL2…](https://testnet.nearblocks.io/txns/AVb82LL2owL5r1D8Fb9peigsKh7QtXVpb9hWSRWxcbMA), escalation [6nEvYNDs…](https://testnet.nearblocks.io/txns/6nEvYNDs8FBcFn4TZi9YcXBxWbPAua9Zc3bZF65VzQNr) |
-| Browser agent is real | Playwright Chromium + vision LLM loop in `agent/browser_agent.py`. Each step's screenshot is shown in the UI. Measured: pickup about 3 s after the vote, payout about 20 s later |
-
-**Not claimed:** not on mainnet; testnet only. The "Water Project (demo)" charity is a page in this repo, not a real charity, and no real money moves.
-
-## Why NEAR
-
-- **Sputnik DAO** is a battle-tested DAO standard. LisDao plugs into it instead of reinventing votes and custody.
-- **Function-call proposals with attached deposits** let the DAO hand the executor exactly the approved budget and nothing more.
-- **Named and implicit accounts.** The agent and the DAO have readable account ids. The charity creates a fresh one-time implicit address for every donation.
-- **Cheap, fast finality**, so propose, vote, dispatch and payout fit in one live flow.
-
-## Architecture
-
+## How it works
+```mermaid
+flowchart LR
+  U[Member wallet<br/>Meteor via wallet-selector] -- add_proposal / act_proposal --> D[Sputnik DAO<br/>lisdao-demo.sputnikv2.testnet]
+  D -- vote passes: FunctionCall dispatch_task + escrow = max_spend --> E[LisDao executor<br/>exec.lisdao-v2-1793741346.testnet]
+  A[Agent<br/>browser_agent.py] -- polls pending_tasks --> E
+  A -- Playwright + vision LLM + OCR check --> C[Demo charity page<br/>one-time NEAR address]
+  A -- report_payout / report_result --> E
+  E -- within tier: pay receiver, refund rest, +1 reputation --> R[Receiver]
+  E -- above tier: refund escrow + open Transfer proposal --> D
+  A -- step feed (token) --> W[Web app /api/agent<br/>Neon Postgres]
+  W --> U
 ```
- web (Next.js, NEAR Connector) ── add_proposal / act_proposal ──► Sputnik DAO (lisdao-demo.sputnikv2.testnet)
-      ▲ polls proposals, tasks, agent feed                           │ vote passes → FunctionCall + escrow
-      │                                                              ▼
- /api/agent (Neon Postgres) ◄── steps ── agent (box) ◄─ pending_tasks ─ LisDao executor (exec.lisdao-v2-…testnet)
-                                         │  report_payout ─────────►  ├─ within tier: pay receiver, refund rest, +reputation
-                                         ▼                            └─ above tier: refund escrow + Sputnik Transfer proposal
-                     Playwright browser + vision LLM (+ OCR check) → demo charity → one-time NEAR address
+1. A council member creates a Sputnik `FunctionCall` proposal to `dispatch_task` (0.01 NEAR bond, signed in their wallet).
+2. The council votes. When it passes, Sputnik calls the executor and attaches `max_spend` as escrow.
+3. The agent picks up the task, drives a browser, reads the payout address, and checks it against page text and OCR.
+4. The agent calls `report_payout`. The **contract** decides: pay now, or escalate to a new DAO vote.
+
+## Payout tiers
+| Rule | Enforced in |
+|---|---|
+| Auto-approve tier = 0.2 NEAR + 0.1 NEAR per reputation point, max 1 NEAR | `executor/src/lib.rs` `auto_cap_of` |
+| Amount must be > 0, ≤ `max_spend`, ≤ escrow | `report_payout` (`"over spending cap"`) |
+| Within tier → pay receiver, return the rest to the DAO, proposer +1 reputation | `report_payout` |
+| Above tier → escrow back to the DAO, executor opens a Sputnik `Transfer` proposal | `report_payout` |
+| Failure → status `Failed`, escrow back to the DAO | `report_result` |
+
+<a id="proof"></a>
+## On-chain proof (NEAR testnet)
+| What | Transaction |
+|---|---|
+| DAO | [lisdao-demo.sputnikv2.testnet](https://testnet.nearblocks.io/address/lisdao-demo.sputnikv2.testnet) |
+| Executor | [exec.lisdao-v2-1793741346.testnet](https://testnet.nearblocks.io/address/exec.lisdao-v2-1793741346.testnet) |
+| Proposal #5 created | [2RFPFNEW…](https://testnet.nearblocks.io/txns/2RFPFNEWBn9J7Lya8tLfdxGTWcG9SjYbMNwyiBBHtWJF) |
+| Proposal #5 paid by executor | [C4gPFrU9…](https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6) |
+| Proposal #6 created | [2h7V8Jk5…](https://testnet.nearblocks.io/txns/2h7V8Jk51PhX9Br7Z14iM6zekUEAmE5opCrE3M8HZLeK) |
+| Proposal #6 paid by executor | [ogdnYy2S…](https://testnet.nearblocks.io/txns/ogdnYy2Sv8c1zq9NYXiiEuJWj6d3cmuoQvtZxaBnTuF) |
+| Earlier: task dispatch + 0.1 NEAR payout | [68niAobb…](https://testnet.nearblocks.io/txns/68niAobbxYkYjhdRdPVU6m2AXsaGH5REbXJfSCHkrdSj), [31bQmyYa…](https://testnet.nearblocks.io/txns/31bQmyYaWd6XfvAkHoY2ey2BQzv9H7rqwA359YGPvhHb) |
+| Earlier: 0.5 NEAR above tier → escalated | [6nEvYNDs…](https://testnet.nearblocks.io/txns/6nEvYNDs8FBcFn4TZi9YcXBxWbPAua9Zc3bZF65VzQNr) |
+
+## Security model
+**Enforced on-chain**
+- `dispatch_task` only accepts callers ending in `.sputnikv2.testnet` (accounts only the Sputnik factory can create).
+- Only the configured agent account can call `report_payout` / `report_result`; only the owner can change the agent.
+- Payout capped by `max_spend` and the escrow; the DAO's main treasury never leaves Sputnik.
+- Above-tier amounts are never auto-paid; they go back to a council vote.
+
+**Enforced off-chain (trust the operator)**
+- The agent's reading of the payout address. The contract trusts *which* address the agent reports (within the cap). OCR + page-text matching reduce, not remove, this risk.
+- Feed and heartbeat posts (`/api/agent`, `/api/heartbeat`) require the `x-agent-token` header to match `AGENT_FEED_TOKEN`; if the variable is not set, the server refuses all posts (503). Reads are public.
+- If the vision LLM is unavailable, a scripted planner runs that step, labelled `[scripted]` in the feed.
+
+<a id="limits"></a>
+**Known limits**
+- Testnet only; single agent account (a central operator); no TEE / attestation of the agent.
+- Any Sputnik DAO can dispatch to the shared executor; reputation is per proposer across all DAOs.
+- Agent tasks are tuned for the demo charity flow, not arbitrary websites.
+- `legacy/contract/` is an earlier all-in-one DAO prototype, not used by the web app.
+
+<a id="quickstart"></a>
+## Quickstart
+```bash
+# 1. Contract tests (4 tests: happy path + tiers/escalation, and 3 negative tests)
+cd executor && cargo test
+
+# Build & deploy to testnet (commands below are a guide; not re-run for this README)
+cargo near build                     # wasm lands in target/near/lisdao_executor.wasm
+near deploy <your-exec>.testnet target/near/lisdao_executor.wasm
+near call <your-exec>.testnet new '{"owner":"you.testnet","agent":"agent.testnet","factory":"sputnikv2.testnet","base_cap":"200000000000000000000000","rep_step":"100000000000000000000000","max_auto":"1000000000000000000000000","bond":"10000000000000000000000"}' --accountId you.testnet
+
+# 2. Web (DATABASE_URL optional: in-memory store without it; set AGENT_FEED_TOKEN or feed posts are refused)
+cd web && npm ci && cp ../.env.example .env.local && npm run dev
+
+# 3. Agent (config is read from ~/.lisdao/agent.env; needs the `near` CLI with the agent account's key)
+cd agent && npm ci && pip install playwright && playwright install chromium
+mkdir -p ~/.lisdao && cp ../.env.example ~/.lisdao/agent.env   # then fill in values
+AGENT_PYTHON=$(which python3) ./run-agent.sh   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
+# OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
+# To fetch it ahead of time: ./agent/fetch-ocr-data.sh
+
+# 4. UI checks (Playwright)
+python web/e2e-buttons.py http://localhost:3000   # base URL argument
 ```
 
-## Fail-closed / safety
+## Repo map
+| Path | What |
+|---|---|
+| `executor/` | Rust executor contract (`dispatch_task`, `report_payout`, `report_result`, views) |
+| `agent/` | `browser_agent.py` (Playwright + vision LLM), `ocr.js` (tesseract.js), `run-agent.sh` |
+| `web/` | Next.js app; `lib/sputnik.js`, `/api/agent` feed, `/api/rpc` read-only RPC proxy, `/demo-charity` |
+| `legacy/contract/` | Earlier prototype DAO contract (not used) |
+| `docs/` | Architecture, security, demo script, testnet account list |
+| `screenshots/` | Desktop and mobile screenshots |
 
-- Only Sputnik DAOs can dispatch, and only the configured **agent account** can report.
-- The payout is capped by `max_spend` and by the escrow the DAO attached. The DAO's main treasury never leaves Sputnik custody.
-- Amounts above the tier are not paid; they go back to a human council vote.
-- The receiver must be a valid NEAR `AccountId`. The agent checks the address against the page text and an OCR reading of the screenshot.
-- If the vision LLM is unavailable, a **scripted fallback** plans that step instead. It is labelled `[scripted]` in the live feed.
-- Only the agent can post to the feed endpoint (shared token).
+## Tracks
+- **Social:** a community decides together what gets done and paid.
+- **Agents:** an AI agent doing real web work with on-chain consequences.
+- **Security:** spending caps, escrow and escalation enforced by the contract, with limits stated plainly.
 
-## Testnet accounts
+## Roadmap
+- Verifiable agent (TEE / NEAR AI) so the reported address is attested.
+- Per-DAO executor config and allow-lists of task sites.
+- Multiple agents with stake/slashing.
+- Mainnet after an audit.
 
-- Sputnik DAO: `lisdao-demo.sputnikv2.testnet` (council: `kaitrades.testnet`, `lisdao-voter-1793741346.testnet`; any 1 vote passes, threshold 1/3)
-- Executor: `exec.lisdao-v2-1793741346.testnet`
-- Agent: `lisdao-agent-1793741346.testnet`
-
-## Layout
-
-- `executor/`: Rust (near-sdk 5), the Sputnik executor. `dispatch_task`, `report_payout`, `report_result`. Views: `pending_tasks`, `get_task`, `get_tasks`, `reputation`, `auto_cap`, `get_config`. Run `cargo test`: 4 tests.
-- `contract/`: an earlier all-in-one DAO contract with its own voting (not used by the web app).
-- `web/`: Next.js app. `lib/sputnik.js` reads Sputnik DAOs and the executor. Also `/demo-charity`, `/api/agent`, and `e2e-buttons.py` (24 UI checks).
-- `agent/`: `browser_agent.py` (Playwright + vision LLM; watches the executor) and `ocr.js` (tesseract.js).
-
-## Run
-
-1. `cd executor && cargo test`, then `cd ../contract && cargo test`.
-2. `cd web && npm i && npm run dev`. Set `DATABASE_URL` (Neon Postgres; optional, in-memory without it) and `AGENT_FEED_TOKEN` to match hosting.
-3. `cd agent && npm i && pip install playwright && playwright install chromium`, then:
-   `WEB_URL=https://lisdao.vercel.app AGENT_FEED_TOKEN=... LLM_API_KEY=... LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai LLM_MODEL=gemini-3.1-flash-lite python browser_agent.py`
-   Any OpenAI-compatible vision endpoint works (for example NEAR AI Cloud, `LLM_BASE_URL=https://cloud-api.near.ai/v1`).
-
-## Libraries
-
-near-sdk, near-api-js, @hot-labs/near-connect (NEAR Connector), Next.js/React, @neondatabase/serverless (Neon Postgres), qrcode, Playwright, tesseract.js. Built with help from AI coding tools.
+## Docs
+[Architecture](docs/ARCHITECTURE.md) · [Security](docs/SECURITY.md) · [Demo script](docs/DEMO.md)
 
 ## License
-
-MIT
+MIT, see [LICENSE](LICENSE). Built at NEAR HACKATHON with help from AI coding tools.
