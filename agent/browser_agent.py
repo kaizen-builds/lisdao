@@ -68,7 +68,7 @@ def call(method, args, contract=None):
         "sign-with-legacy-keychain", "send"], capture_output=True, text=True, timeout=90)
     txt = out.stdout + out.stderr
     m = re.search(r"Transaction ID:\s*([1-9A-HJ-NP-Za-km-z]{43,44})", txt) or re.search(r"/txns/([1-9A-HJ-NP-Za-km-z]{43,44})", txt)
-    if out.returncode != 0 or "Error" in txt and not m: raise RuntimeError(txt[-800:])
+    if out.returncode != 0 or ("Error" in txt and not m): raise RuntimeError(txt[-800:])
     return m.group(1) if m else None
 
 ELEMENTS_JS = """() => { let i = 0; const out = [];
@@ -194,6 +194,8 @@ def run_task(dao, prop, ex=False):
     st = (view("get_task", {"task_id": pid}, EXECUTOR) or {}).get("status") if ex else None
     if st == "Escalated":
         feed(dao, pid, f"{amount_near} NEAR is above this proposer's auto-approve tier, so the executor returned the escrow and opened a Sputnik Transfer proposal to {address}. The council votes on it in the DAO.", phase="done", tx=tx, address=address, escalated=True)
+    elif ex and st != "Executed":
+        feed(dao, pid, f"Payout tx sent but on-chain task status is {st or 'unreadable'}, not Executed/Escalated; not claiming success", phase="failed", tx=tx, address=address)
     else:
         feed(dao, pid, f"Done in {time.time() - T0['t']:.0f}s. {amount_near} NEAR sent to {address}", phase="done", tx=tx, address=address)
     time.sleep(1)
