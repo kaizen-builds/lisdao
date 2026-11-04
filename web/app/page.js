@@ -156,7 +156,7 @@ export default function Home() {
     <div className="hint">Try it: create a proposal, vote Yes, watch the agent</div>
     <button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
     <button className="btn full" style={{ marginTop: 8 }} onClick={() => { const a = prompt("Your Sputnik DAO address", "name.sputnikv2.testnet"); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button>
-    <button className="linkbtn" onClick={() => open(0)}>Classic demo (LisDao’s own DAO contract)</button></div>{toast && <div className="toast">{toast}</div>}</>;
+    </div>{toast && <div className="toast">{toast}</div>}</>;
 
   if (pane === "create-dao") return <>{nav}<div className="center fade" style={{ textAlign: "left" }}><div className="panel">
     <h2>Create New DAO</h2>
@@ -172,14 +172,6 @@ export default function Home() {
         default_vote_policy: { weight_kind: "RoleWeight", quorum: "0", threshold: [a, b] }, proposal_bond: "10000000000000000000000", proposal_period: "604800000000000", bounty_bond: "100000000000000000000000", bounty_forgiveness_period: "604800000000000" };
       const args = btoa(JSON.stringify({ config: { name: nm, purpose: "LisDao: council votes, AI agent executes tasks", metadata: "" }, policy }));
       if (await call("create", { name: nm, args }, toYocto(f.dep ?? "6.5"), FACTORY, "300000000000000")) { flash("Sputnik DAO created"); setTimeout(() => open(nm + "." + FACTORY), 1500); } }}>{busy ? "Creating..." : "Create Sputnik DAO"}</button>
-    <details style={{ marginTop: 14 }}><summary className="muted">Classic DAO (LisDao’s own contract)</summary>
-    <label>DAO Name</label><input value={f.cname || ""} onChange={e => setF({ ...f, cname: e.target.value })} />
-    <label>Members (account:votes)</label><input placeholder="alice.testnet:3, bob.testnet:1" value={f.cmembers || ""} onChange={e => setF({ ...f, cmembers: e.target.value })} />
-    <label>Quorum %</label><input value={f.quorum} onChange={e => setF({ ...f, quorum: e.target.value })} />
-    <button className="btn full" disabled={busy} onClick={async () => { const f2 = { ...f, name: f.cname || "", members: f.cmembers || "" }; if (!f2.name.trim()) return flash("Give your DAO a name");
-      const before = daos.length; const ok = await call("create_dao", { name: f2.name.trim(), agent: AGENT, quorum_pct: +f.quorum, voting_period_minutes: 10080,
-      members: f2.members.split(",").map(s => s.trim()).filter(Boolean).map(s => { const [a, w] = s.split(":"); return [a, +(w || 1)]; }) });
-      if (ok) { flash("DAO created"); setPane("summary"); setTimeout(async () => { const ds = await view("list_daos").catch(() => daos); setDaos(ds); open(ds.length > before ? ds.length - 1 : 0); }, 1500); } }}>{busy ? "Creating..." : "Create classic DAO"}</button></details>
     <button className="btn full" style={{ marginTop: 8 }} onClick={() => { setPane("summary"); }}>← Back</button></div></div>{toast && <div className="toast">{toast}</div>}</>;
 
   if (!dao) return <>{nav}<div className="grid"><div className="panel">{[0, 1, 2].map(i => <div key={i} className="sk big" />)}</div>
@@ -195,7 +187,7 @@ export default function Home() {
     <div className="grid">
       <div className="panel">
         <div className="row"><h2 style={{ margin: 0 }}>{dao.name}</h2><select className="btn sm" value={dao.id} onChange={e => e.target.value === "home" ? (setCur(null), setPane("summary")) : open(isSputnik(e.target.value) ? e.target.value : +e.target.value)} aria-label="Switch DAO">
-          <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}{daos.map(d => <option key={d.id} value={d.id}>{d.name} (classic)</option>)}<option value="home">← Home</option></select></div>
+          <option value={DEMO_SPUTNIK}>LisDao Demo (Sputnik)</option>{isSputnik(dao.id) && dao.id !== DEMO_SPUTNIK && <option value={dao.id}>{dao.name} (Sputnik)</option>}<option value="home">← Home</option></select></div>
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
         <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>Summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}

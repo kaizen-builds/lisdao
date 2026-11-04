@@ -29,7 +29,6 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
 | 4 | Tap **Vote Yes** | Sputnik `act_proposal VoteApprove`. The proposal passes, Sputnik calls the executor, and the live agent panel opens |
 | 5 | Watch the panel | Browser screenshots and steps, then "paid by the LisDao executor from the DAO’s escrow" with a nearblocks link, in about 20 seconds |
 | 6 | Open "Donate 0.5 NEAR…" | An example above the tier: the executor opened a Sputnik Transfer proposal ("LisDao task #1…") for the council |
-| 7 | **Classic demo** link on the landing page | The earlier version of LisDao with its own DAO contract, kept for reference |
 
 ## What is real, with receipts (NEAR testnet)
 
@@ -78,14 +77,13 @@ LisDao started as my own EVM idea. All code in this repo is new, written for NEA
 - Sputnik DAO: `lisdao-demo.sputnikv2.testnet` (council: `kaitrades.testnet`, `lisdao-voter-1793741346.testnet`; any 1 vote passes, threshold 1/3)
 - Executor: `exec.lisdao-v2-1793741346.testnet`
 - Agent: `lisdao-agent-1793741346.testnet`
-- Classic contract (earlier version): `lisdao-v2-1793741346.testnet`
 
 ## Layout
 
 - `executor/`: Rust (near-sdk 5), the Sputnik executor. `dispatch_task`, `report_payout`, `report_result`. Views: `pending_tasks`, `get_task`, `get_tasks`, `reputation`, `auto_cap`, `get_config`. Run `cargo test`: 4 tests.
-- `contract/`: the classic all-in-one DAO contract (own voting), kept for the classic demo.
-- `web/`: Next.js app. `lib/sputnik.js` reads Sputnik DAOs and the executor. Also `/demo-charity`, `/api/agent`, and `e2e-buttons.py` (29 UI checks).
-- `agent/`: `browser_agent.py` (Playwright + vision LLM; watches the executor and the classic contract) and `ocr.js` (tesseract.js).
+- `contract/`: an earlier all-in-one DAO contract with its own voting (not used by the web app).
+- `web/`: Next.js app. `lib/sputnik.js` reads Sputnik DAOs and the executor. Also `/demo-charity`, `/api/agent`, and `e2e-buttons.py` (24 UI checks).
+- `agent/`: `browser_agent.py` (Playwright + vision LLM; watches the executor) and `ocr.js` (tesseract.js).
 
 ## Run
 
