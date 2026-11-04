@@ -186,6 +186,7 @@ export default function Home() {
   if (cur === null && pane !== "create-dao") return <>{nav}<div className="center fade">
     <div><Drop size={96} /></div><h1 style={{ margin: "4px 0" }}><Wordmark size={40} /></h1><p className="pitch">A DAO whose AI agent does real-world tasks after members vote.</p>
     <div className="hint" style={{ marginTop: -6 }}>Built on Sputnik DAO · the DAO keeps the money and the votes, LisDao adds the agent</div>
+    <div className="hint">Agent model can run on NEAR AI Cloud</div>
     <ol className="how">
       <li style={{ animationDelay: ".05s" }}><b>1</b>Vote on a task</li>
       <li style={{ animationDelay: ".15s" }}><b>2</b>The agent does it in a real browser</li>

@@ -7,7 +7,8 @@ When it reaches the charity's one-time deposit address it extracts it (LLM + DOM
 Tesseract OCR cross-check) and calls report_payout; the contract pays from the treasury.
 
 Env: CONTRACT_ID, AGENT_ID, CHARITY_URL, FEED_URL, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
-     AGENT_FEED_TOKEN, RECORD_DIR, HEADLESS, ONCE.
+     LLM_PROVIDER (nearai -> NEARAI_API_KEY, NEARAI_MODEL), LLM_TIMEOUT, LLM_RETRIES,
+     AGENT_FEED_TOKEN, RECORD_DIR, HEADLESS, ONCE, DRY_RUN (or --dry-run).
 """
 import base64, difflib, json, os, re, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
@@ -25,9 +26,19 @@ RPC_TIMEOUTS = [2, 5]  # short timeout on the fast RPC, then the backup
 POLL = float(E("POLL_SECONDS", "0.7"))
 HEARTBEAT = E("HEARTBEAT_URL", WEB + "/api/heartbeat")
 STATE = {"state": "idle", "dao_id": None, "proposal_id": None, "last_poll": 0, "last_poll_ms": 0, "polls": 0}
-LLM_URL = E("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
-LLM_KEY = E("LLM_API_KEY") or E("NEAR_AI_API_KEY") or E("GEMINI_API_KEY")
-LLM_MODEL = E("LLM_MODEL", "gemini-3.1-flash-lite")
+PROVIDER = E("LLM_PROVIDER", "").lower()  # "nearai" -> NEAR AI Cloud; default: generic OpenAI-compatible (Gemini)
+if PROVIDER == "nearai":
+    LLM_URL = E("NEARAI_BASE_URL", "https://cloud-api.near.ai/v1")
+    LLM_KEY = E("NEARAI_API_KEY") or E("NEAR_AI_API_KEY")
+    LLM_MODEL = E("NEARAI_MODEL") or E("NEAR_AI_MODEL") or "z-ai/glm-5.3-flash"
+    LLM_TIMEOUT, LLM_RETRIES = float(E("LLM_TIMEOUT", "75")), int(E("LLM_RETRIES", "1"))  # NEAR AI calls can take 10-60s
+else:
+    LLM_URL = E("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai")
+    LLM_KEY = E("LLM_API_KEY") or E("NEAR_AI_API_KEY") or E("GEMINI_API_KEY")
+    LLM_MODEL = E("LLM_MODEL", "gemini-3.1-flash-lite")
+    LLM_TIMEOUT, LLM_RETRIES = float(E("LLM_TIMEOUT", "8")), int(E("LLM_RETRIES", "0"))
+DRY_RUN = "--dry-run" in sys.argv or E("DRY_RUN") == "1"  # browser + LLM only: no feed posts, no on-chain calls
+USAGE = {"calls": 0, "ok": 0, "prompt_tokens": 0, "completion_tokens": 0, "seconds": 0.0}
 LLM_COOLDOWN = {"until": 0}
 ATTEMPTS = {}; MAX_ATTEMPTS = 2  # per task, counted only for crashed runs (exceptions)
 T0 = {"t": 0}
@@ -58,6 +69,7 @@ def _view(RPC, method, args, contract, timeout):
 def feed(dao, pid, text, shot=None, **kw):
     el = time.time() - T0["t"] if T0["t"] else 0
     print(f"[{dao}/{pid}] +{el:5.1f}s {text}", flush=True)
+    if DRY_RUN: return
     threading.Thread(target=_feed, args=(dao, pid, text, shot, kw), daemon=True).start()
 
 def _feed(dao, pid, text, shot, kw):
@@ -103,15 +115,23 @@ Rules: if a textbox already has a default value (e.g. 25) you must use "type" wh
 Skip optional tax receipt pages by clicking Next Step. When the one-time deposit address is visible, use "extract" and copy the address exactly.
 Reply ONLY JSON: {{"verify":"ok|off_track|start","thought":"...","action":"click|type|select|extract|fail","id":<element id>,"value":"<text or option value>","address":"<only for extract>"}}"""
     if time.time() < LLM_COOLDOWN["until"]: return None
-    body = {"model": LLM_MODEL, "temperature": 0, "reasoning_effort": "low", "response_format": {"type": "json_object"}, "messages": [{"role": "user", "content": [
+    body = {"model": LLM_MODEL, "temperature": 0, "messages": [{"role": "user", "content": [
         {"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + img}}]}]}
-    try:  # one fast attempt; on rate limit / overload fall back to the scripted planner immediately
-        r = post(LLM_URL.rstrip("/") + "/chat/completions", body, {"Authorization": "Bearer " + LLM_KEY}, 8)
-        c = r["choices"][0]["message"]["content"]; return json.loads(c[c.find("{"): c.rfind("}") + 1])
-    except Exception as e:
-        print("  llm error:", str(e)[:120])
-        if any(k in str(e) for k in ("429", "503", "timed out")): LLM_COOLDOWN["until"] = time.time() + 60
-        return None
+    if PROVIDER != "nearai": body |= {"reasoning_effort": "low", "response_format": {"type": "json_object"}}
+    for attempt in range(LLM_RETRIES + 1):
+        t = time.time(); USAGE["calls"] += 1
+        try:  # on failure fall back to the scripted planner
+            r = post(LLM_URL.rstrip("/") + "/chat/completions", body, {"Authorization": "Bearer " + LLM_KEY}, LLM_TIMEOUT)
+            USAGE["seconds"] += time.time() - t
+            u = r.get("usage") or {}; USAGE["prompt_tokens"] += u.get("prompt_tokens", 0); USAGE["completion_tokens"] += u.get("completion_tokens", 0)
+            c = r["choices"][0]["message"]["content"] or ""; out = json.loads(c[c.find("{"): c.rfind("}") + 1]); USAGE["ok"] += 1; return out
+        except Exception as e:
+            USAGE["seconds"] += time.time() - t
+            print("  llm error:", str(e)[:120])
+            if attempt == LLM_RETRIES:
+                if any(k in str(e) for k in ("429", "503", "timed out")): LLM_COOLDOWN["until"] = time.time() + 60
+                return None
+            time.sleep(2)
 
 def scripted(goal_asset, goal_amount, elements):
     """Deterministic fallback planner (used when no vision key or the LLM is unavailable)."""
@@ -141,7 +161,7 @@ def run_task(dao, prop, ex=False):
     amount_near = m.group(1) if m else str(cap / 1e24)
     yocto = int(round(float(amount_near) * 1e6)) * 10**18
     feed(dao, pid, f"Proposal passed. Task: “{goal}”", reset=True, phase="start")
-    if yocto > cap: feed(dao, pid, "Refused: amount exceeds the proposal's spending cap", phase="failed"); call("report_result", {**ids(), "success": False, "report": "over cap"}, tgt); return
+    if yocto > cap and not DRY_RUN: feed(dao, pid, "Refused: amount exceeds the proposal's spending cap", phase="failed"); call("report_result", {**ids(), "success": False, "report": "over cap"}, tgt); return
     use_llm = bool(LLM_KEY)
     feed(dao, pid, f"Opening browser · planner: {'vision LLM ' + LLM_MODEL if use_llm else 'scripted fallback (no vision key)'}")
     with sync_playwright() as p:
@@ -158,6 +178,7 @@ def run_task(dao, prop, ex=False):
             els = page.evaluate(ELEMENTS_JS); img = shot(page)
             a = llm(goal + f" (pay with NEAR, amount {amount_near})", history, img, els) if use_llm else None
             src = "LLM"
+            if a and DRY_RUN: print("  llm action:", json.dumps({k: a.get(k) for k in ("verify", "action", "id", "value", "address")}), flush=True)
             if not a or a.get("action") not in ("click", "type", "select", "extract", "fail"): a = scripted("NEAR", amount_near, els); src = "scripted"
             if a.get("verify") == "off_track": feed(dao, pid, "Verifier: previous action looks off-track, re-planning", img)
             if a["action"] == "fail": feed(dao, pid, "Agent could not find a next step: " + a.get("thought", ""), img, phase="failed"); break
@@ -192,6 +213,9 @@ def run_task(dao, prop, ex=False):
             page.wait_for_timeout(200)
             history.append({"step": step, "action": a["action"], "id": a.get("id"), "value": a.get("value"), "label": label})
         ctx.close(); b.close()
+    if DRY_RUN:
+        print(f"DRY RUN: extracted address {address or 'NONE'} · would call report_payout(receiver_id={address}, amount={yocto}) · LLM usage {json.dumps(USAGE)}", flush=True)
+        return address
     if not address:
         call("report_result", {**ids(), "success": False, "report": "agent failed to reach deposit address"}, tgt); return
     feed(dao, pid, f"Reporting address on-chain; {'LisDao executor pays from the Sputnik DAO escrow' if ex else 'contract pays from treasury'} ({amount_near} NEAR)…")
@@ -207,6 +231,7 @@ def run_task(dao, prop, ex=False):
     time.sleep(1)
 
 def beat():
+    if DRY_RUN: return
     def go():
         try: post(HEARTBEAT, {k: STATE[k] for k in ("state", "dao_id", "proposal_id")} | {"model": LLM_MODEL}, {"x-agent-token": E("AGENT_FEED_TOKEN", "")}, 5)
         except Exception as e: print("  heartbeat error:", str(e)[:100], flush=True)
@@ -225,7 +250,14 @@ def heartbeat_loop():
             print(f"{time.strftime('%H:%M:%S')} heartbeat · {STATE['state']} · {STATE['polls']} polls · last poll {age:.1f}s ago ({STATE['last_poll_ms']}ms)", flush=True)
         time.sleep(0.5)
 
+def dry_run():
+    """--dry-run: run one demo task (browser + LLM + #deposit-address check) without feed posts or report_payout."""
+    goal = E("DRY_GOAL", "Donate 0.2 NEAR to the demo charity")
+    prop = {"id": 0, "action": {"AgentTask": {"instructions": goal, "max_spend": str(10**24)}}}
+    addr = run_task("dry-run", prop); sys.exit(0 if addr else 1)
+
 def main():
+    if DRY_RUN: return dry_run()
     print(f"{time.strftime('%H:%M:%S')} LisDao agent {AGENT} watching {CONTRACT} + Sputnik executor {EXECUTOR} · poll {POLL}s · LLM {LLM_MODEL} @ {LLM_URL}", flush=True)
     threading.Thread(target=heartbeat_loop, daemon=True).start()
     while True:

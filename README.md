@@ -3,12 +3,12 @@
 <p align="center">
   <a href="https://lisdao.vercel.app"><strong>Live app ↗</strong></a> · Demo video (demo video link coming) · <a href="#proof">On-chain proof</a> · <a href="#quickstart">Run it</a> · <a href="#limits">What it does not do yet</a>
 </p>
-<p align="center"><sub>NEAR TESTNET · SPUTNIK DAO v2 · RUST (near-sdk 5) · NEXT.JS 15 · PLAYWRIGHT · Built at NEAR HACKATHON</sub></p>
+<p align="center"><sub>NEAR TESTNET · SPUTNIK DAO v2 · RUST (near-sdk 5) · NEXT.JS 15 · PLAYWRIGHT · NEAR AI CLOUD · Built at NEAR HACKATHON</sub></p>
 
 > **Testnet only.** No mainnet deployment and no real money. The "Water Project" charity is a demo page in this repo.
 
 ## What it is
-LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent.
+LisDao is an AI executor for **Sputnik DAO v2**. The votes and the treasury stay in Sputnik. LisDao adds one thing: a proposal written in plain words ("Donate 0.1 NEAR to the water project") that, once the council passes it, is carried out by an AI agent in a real browser and paid by a contract, never by the agent. The agent's vision model can run on **NEAR AI Cloud** (tested end to end with `z-ai/glm-5.3-flash` and `x-ai/grok-4.7`).
 
 ## How it works
 ```mermaid
@@ -16,7 +16,7 @@ flowchart LR
   U[Member wallet<br/>Meteor via wallet-selector] -- add_proposal / act_proposal --> D[Sputnik DAO<br/>lisdao-demo.sputnikv2.testnet]
   D -- vote passes: FunctionCall dispatch_task + escrow = max_spend --> E[LisDao executor<br/>exec.lisdao-v2-1793741346.testnet]
   A[Agent<br/>browser_agent.py] -- polls pending_tasks --> E
-  A -- Playwright + vision LLM + OCR check --> C[Demo charity page<br/>one-time NEAR address]
+  A -- Playwright + vision LLM (NEAR AI Cloud) + OCR check --> C[Demo charity page<br/>one-time NEAR address]
   A -- report_payout / report_result --> E
   E -- within tier: pay receiver, refund rest, +1 reputation --> R[Receiver]
   E -- above tier: refund escrow + open Transfer proposal --> D
@@ -98,6 +98,9 @@ cd ..
 cd agent && npm ci && pip install playwright && playwright install chromium
 mkdir -p ~/.lisdao && cp ../.env.example ~/.lisdao/agent.env   # then fill in values
 AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vision endpoint (default model gemini-3.1-flash-lite)
+# NEAR AI Cloud as the agent's model: set LLM_PROVIDER=nearai and NEARAI_API_KEY (NEARAI_MODEL defaults to z-ai/glm-5.3-flash).
+# Dry run (browser + LLM + #deposit-address check, no feed posts, no on-chain calls):
+#   LLM_PROVIDER=nearai NEARAI_API_KEY=... CHARITY_URL=https://lisdao.vercel.app/demo-charity python3 agent/browser_agent.py --dry-run
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
 # To fetch it ahead of time (from repo root): ./agent/fetch-ocr-data.sh
 
@@ -111,7 +114,7 @@ python web/e2e-buttons.py http://localhost:3000/   # from repo root, against a r
 | Path | What |
 |---|---|
 | `executor/` | Rust executor contract (`dispatch_task`, `report_payout`, `report_result`, views) |
-| `agent/` | `browser_agent.py` (Playwright + vision LLM), `ocr.js` (tesseract.js), `run-agent.sh` |
+| `agent/` | `browser_agent.py` (Playwright + vision LLM: NEAR AI Cloud or any OpenAI-compatible endpoint; `--dry-run`), `ocr.js` (tesseract.js), `run-agent.sh` |
 | `web/` | Next.js app; `lib/sputnik.js`, `/api/agent` feed, `/api/rpc` read-only RPC proxy, `/demo-charity` |
 | `legacy/contract/` | Earlier prototype DAO contract (not used) |
 | `docs/` | Architecture, security, demo script, testnet account list |

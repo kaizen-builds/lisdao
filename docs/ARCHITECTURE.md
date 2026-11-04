@@ -6,7 +6,7 @@ LisDao has three parts. Votes and the treasury stay in a standard Sputnik DAO v2
 |---|---|---|
 | Sputnik DAO v2 | `lisdao-demo.sputnikv2.testnet` (factory `sputnikv2.testnet`) | Members create and vote on proposals; holds the treasury |
 | Executor contract | `executor/` → `exec.lisdao-v2-1793741346.testnet` | Receives passed tasks with escrow; pays or escalates |
-| Agent | `agent/browser_agent.py`, run by `agent/run-agent.sh` | Polls tasks, drives Chromium (Playwright + vision LLM), reports the payout address |
+| Agent | `agent/browser_agent.py`, run by `agent/run-agent.sh` | Polls tasks, drives Chromium (Playwright + vision LLM; can run on NEAR AI Cloud with `LLM_PROVIDER=nearai`, tested with `z-ai/glm-5.3-flash` and `x-ai/grok-4.7`), reports the payout address |
 | Web app | `web/` (Next.js 15, hosted on Vercel) | Wallet UI (wallet-selector + Meteor), live agent feed, RPC proxy, demo charity page |
 
 ## Flow
