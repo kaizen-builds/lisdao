@@ -54,7 +54,7 @@ function Agent({ dao, p, onClose }) {
       {!done && !failed && p.status === "Executing" && <div style={{ position: "relative", height: 40 }}><div className="ripple" style={{ left: 130, top: 10 }} /><div className="ripple b" style={{ left: 130, top: 10 }} /></div>}
       {(done || p.status === "Executed" || p.status === "Escalated") && <div className="receipt"><b>{p.status === "Escalated" || done?.escalated ? "Above the auto-approve tier · sent to the council as a Sputnik Transfer proposal" : dao.sputnik ? "Reported on-chain · paid by the LisDao executor from the DAO’s escrow" : "Reported on-chain · paid by the DAO contract"}</b>
         {done?.address && <div style={{ marginTop: 6, overflowWrap: "anywhere" }}>To: {done.address}</div>}
-        {done?.tx && <div style={{ marginTop: 6 }}><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank">View transaction ↗</a></div>}
+        {done?.tx && <div style={{ marginTop: 6 }}><a href={`https://testnet.nearblocks.io/txns/${done.tx}`} target="_blank">Agent payout tx ↗</a></div>}
         {p.result && <div style={{ marginTop: 6, fontSize: 12 }}>{p.result}</div>}</div>}
     </div>
     <div style={{ padding: 10 }}><button className="btn full" onClick={onClose}>Close</button></div></div>;
@@ -74,7 +74,7 @@ export default function Home() {
   const [agent, setAgent] = useState(false); const [busy, setBusy] = useState(false); const [menu, setMenu] = useState(false);
   const [ready, setReady] = useState(false); const [loadingP, setLoadingP] = useState(false); const [toast, setToast] = useState(""); const [dismissed, setDismissed] = useState(null);
   const [f, setF] = useState({ name: "", members: "", quorum: 51, title: "Donate to the water project", desc: "Donate 0.1 NEAR to the water project", amt: "0.1" });
-  const [lastTx, setLastTx] = useState(null); const [err, setErr] = useState(""); const [phase, setPhase] = useState(""); const [adv, setAdv] = useState(false);
+  const [lastTx, setLastTx] = useState(null); const [lastKind, setLastKind] = useState(""); const [wReady, setWReady] = useState(false); const [err, setErr] = useState(""); const [phase, setPhase] = useState(""); const [adv, setAdv] = useState(false);
   const [sdao, setSdao] = useState(null); const [tier, setTier] = useState(null); const pol = useRef(null); const [bal, setBal] = useState(null);
 
   useEffect(() => { const q = new URLSearchParams(location.search);
@@ -89,7 +89,7 @@ export default function Home() {
     (async () => {
     if (q.get("e2e")) { // test mode: fake connected wallet that records txs instead of sending
       window.__txs = []; const fake = { wallet: async () => { if (q.get("e2e") === "dead") throw new Error("No accounts found"); return ({ signAndSendTransaction: async t => { window.__txs.push(t); return { transaction: { hash: "e2e" } }; } }); }, disconnect: async () => {} };
-      setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); return;
+      setSel(fake); setModal({ show: () => { window.__connectClicked = true; setAcct("e2e-user.testnet"); } }); setAcct(q.get("e2e") === "out" ? undefined : "e2e-user.testnet"); setWReady(true); return;
     }
     const [{ setupWalletSelector, internalActionToNaj }, { setupMeteorWallet }] = await Promise.all([import("@near-wallet-selector/core"), import("@near-wallet-selector/meteor-wallet")]);
     const selector = await setupWalletSelector({ network: "testnet", modules: [setupMeteorWallet()] });
@@ -105,7 +105,8 @@ export default function Home() {
       .then(() => { setNeedRe(false); sync(selector.store.getState()); }).catch(e => { console.warn("connect", e); wP = getW(); }); } });
     const st = selector.store.getState();
     if (st.accounts?.length) { const w = await getW(); if (await w.isSignedIn()) sync(st); else { console.warn("wallet: persisted account without live Meteor session"); try { await w.signOut(); } catch {} resetWallet(); setAcct(undefined); setNeedRe(true); } }
-  })(); }, []);
+    setWReady(true);
+  })().catch(e => { console.error("wallet init", e); setWReady(true); }); }, []);
   useEffect(() => { if (cur === null) return; const t = setInterval(async () => {
     if (isSputnik(cur)) { try { await loadS(cur); } catch {} return; }
     try { const [ps, ds] = await Promise.all([view("get_proposals", { dao_id: cur }), view("list_daos")]); setProps(old => [...ps, ...old.filter(x => x.optimistic && x.id >= ps.length)]); setDaos(ds); } catch {} }, 1500);
@@ -159,7 +160,7 @@ export default function Home() {
       const res = await withTimeout(w.signAndSendTransaction({ receiverId, actions: [methodName === "$transfer" ? { type: "Transfer", params: { deposit } } : { type: "FunctionCall", params: { methodName, args, gas, deposit: deposit || "0" } }] }), 60000, "WALLET_TIMEOUT");
       const h = txHash(res); if (!h) { if (res == null && acct !== "e2e-user.testnet") { reconnect(); return false; } throw new Error("The wallet did not send a transaction"); }
       setPhase("confirm"); if (h !== "e2e") await verifyTx(h, acct);
-      setLastTx(h); refresh(); return h;
+      setLastTx(h); setLastKind(methodName); refresh(); return h;
     } catch (e) { console.error("tx", e); const m = String(e?.message || e); const msg = m === "WALLET_TIMEOUT" ? "Wallet did not respond. Open your wallet and try again." : m.includes("not a member") || m.includes("ERR_PERMISSION_DENIED") ? "Your wallet isn't on this DAO's council" : m.includes("already voted") || m.includes("ERR_ALREADY_VOTED") ? "You already voted" : m.includes("ERR_NO_PROPOSAL") ? "That proposal does not exist on-chain" : m.includes("ONCHAIN:") ? "Failed on-chain: " + m.slice(8, 110) : /reject|cancel|closed|denied/i.test(m) ? "Cancelled in wallet" : "Transaction failed: " + m.slice(0, 100);
       setErr(msg); flash(msg); return false; }
     finally { setBusy(false); setPhase(""); }
@@ -169,6 +170,7 @@ export default function Home() {
   const nav = <div className="nav"><div className="brandrow"><Drop size={26} /><Wordmark /><span className="net">● NEAR Testnet</span></div>
     <div style={{ position: "relative" }}>{acct
       ? <button className="btn" onClick={() => setMenu(!menu)}>👛 {short(acct)} ▾</button>
+      : !wReady ? <button className="btn" disabled aria-busy="true">👛 …</button>
       : <button className="btn" onClick={() => modal?.show()}>👛 {needRe ? "Reconnect wallet" : "Connect wallet"}</button>}
       {menu && <div className="panel" style={{ position: "absolute", right: 0, top: 42, padding: 8, zIndex: 5 }}>
         <button className="btn sm" onClick={async () => { await sel.disconnect().catch(() => {}); setAcct(undefined); setMenu(false); }}>Sign out</button></div>}</div></div>;
@@ -228,8 +230,9 @@ export default function Home() {
         <div className="row" style={{ marginTop: 24 }}><h3 style={{ margin: 0 }}>Proposals</h3><button className="btn p sm" onClick={() => setPane("create")}>Create New Proposal</button></div>
         <div className={"card" + (pane === "summary" ? " on" : "")} onClick={() => setPane("summary")}>DAO summary</div>
         {loadingP && [0, 1].map(i => <div key={i} className="sk big" />)}
-        {props.slice().reverse().map(x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
-          <div className="row"><span>{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div></div>)}
+        {(() => { const all = props.slice().reverse(); const card = x => <div key={x.id} className={"card" + (x.id === pid && pane === "proposal" ? " on" : "")} onClick={() => showP(dao.id, x.id)}>
+          <div className="row"><span>{x.title}</span><span className={"badge " + badge(x.status)}>{badge(x.status)}</span></div></div>;
+          return <>{all.slice(0, 5).map(card)}{all.length > 5 && <details className="older"><summary className="muted" style={{ cursor: "pointer", margin: "8px 0" }}>Older proposals ({all.length - 5})</summary>{all.slice(5).map(card)}</details>}</>; })()}
       </div>
       <div className="panel fade" key={pane + pid}>
         {pane === "summary" && <>
@@ -307,7 +310,7 @@ export default function Home() {
           {err && <div className="warn" role="alert">{err}</div>}
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
           {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && !agent && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>View Agent Execution</button>}
-          <div className="muted" style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank">View transaction ↗</a>}
+          <div className="muted" style={{ marginTop: 12, display: "flex", gap: 14, flexWrap: "wrap" }}>{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank">{lastKind === "add_proposal" ? "Proposal created tx ↗" : lastKind === "act_proposal" ? "Vote tx ↗" : "Transaction ↗"}</a>}
             {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank">Proposal #{p.id} on the DAO ↗</a>}</div>
           {p.result && <div className="receipt" style={{ marginTop: 14 }}><b>Agent report (on-chain):</b> {p.result}</div>}
         </>}
