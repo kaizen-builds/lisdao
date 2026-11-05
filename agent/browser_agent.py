@@ -126,12 +126,13 @@ HIGHLIGHT_JS = """([id, n, total, label]) => { const el = document.querySelector
 # Cursor overlay (init script, so it is re-injected on every navigation; last position kept in sessionStorage).
 CURSOR_INIT_JS = """(() => { const add = () => { if (document.getElementById('lis-cursor') || !document.body) return;
   const s = document.createElement('style'); s.textContent = '#lis-cursor{position:fixed;left:0;top:0;width:26px;height:34px;pointer-events:none;z-index:2147483647;' +
-    'transition:transform 700ms cubic-bezier(.45,.05,.25,1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))}' +
+    'transition:transform 700ms cubic-bezier(.45,.05,.25,1);filter:drop-shadow(0 0 6px rgba(232,101,10,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.35))}' +
     '@keyframes lisripple{0%{transform:translate(-50%,-50%) scale(.2);opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}' +
     '.lis-ripple{position:fixed;width:44px;height:44px;border-radius:50%;border:3px solid #E8650A;background:rgba(232,101,10,.25);pointer-events:none;z-index:2147483647;animation:lisripple 550ms ease-out forwards}';
   document.head.appendChild(s);
   const c = document.createElement('div'); c.id = 'lis-cursor';
-  c.innerHTML = '<svg width="26" height="34" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17.5 29.5 L13 19.5 L22 19.5 Z" fill="#fff" stroke="#111" stroke-width="2" stroke-linejoin="round"/></svg>';
+  c.innerHTML = '<svg width="26" height="34" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17.5 29.5 L13 19.5 L22 19.5 Z" fill="#E8650A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>' +
+    '<span style="position:absolute;left:22px;top:26px;background:#E8650A;color:#fff;font:700 12px/1 system-ui,-apple-system,Segoe UI,sans-serif;padding:4px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 0 10px rgba(232,101,10,.7)">LisDao AI</span>';
   const p = JSON.parse(sessionStorage.getItem('lis-cursor') || 'null') || [innerWidth / 2, innerHeight / 2];
   c.style.transition = 'none'; c.style.transform = `translate(${p[0]}px,${p[1]}px)`; document.body.appendChild(c);
   requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transition = ''; })); };
