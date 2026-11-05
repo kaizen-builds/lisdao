@@ -1,7 +1,7 @@
 <h1 align="center">LisDao</h1>
 <p align="center"><strong>Your community votes. An AI agent does the job in a real browser. A NEAR contract pays, within limits the DAO sets.</strong></p>
 <p align="center">
-  <a href="https://lisdao.vercel.app"><strong>Live app ↗</strong></a> · Demo video (demo video link coming) · <a href="#proof">On-chain proof</a> · <a href="#quickstart">Run it</a> · <a href="#limits">What it does not do yet</a>
+  <a href="https://lisdao.vercel.app"><strong>Live app ↗</strong></a> · <a href="#proof">On-chain proof</a> · <a href="#quickstart">Run it</a> · <a href="#limits">What it does not do yet</a>
 </p>
 <p align="center"><sub>NEAR TESTNET · SPUTNIK DAO v2 · RUST (near-sdk 5) · NEXT.JS 15 · PLAYWRIGHT · NEAR AI CLOUD · Built at NEAR HACKATHON</sub></p>
 
