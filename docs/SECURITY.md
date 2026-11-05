@@ -42,5 +42,21 @@ These need a contract change and redeploy; the planned fixes are in [ROADMAP.md]
 - Agent tasks are tuned for the demo charity flow, not arbitrary websites.
 - `legacy/contract/` is an unused earlier prototype and is not deployed by the app.
 
+## Limit test (over-cap payout is refused)
+**What it shows:** the executor refuses a payout above the amount the DAO voted (`max_spend`), even when the call comes from the real agent account.
+
+**Status:** reproducible steps below; **not yet run on testnet.** `report_payout` checks the task status (`Executing`) before the cap, and every task on the live executor is already settled (`Executed`/`Escalated`/`Failed`). A refused over-cap call therefore needs a fresh task in `Executing`, which needs a passed proposal in the demo DAO (a council wallet's approval). A call on a settled task fails with `not executing`, which proves single settlement, not the cap.
+
+Already on-chain: `report_payout` from a non-agent account fails `only agent`, nothing moves ([5FA31kak…](https://testnet.nearblocks.io/txns/5FA31kakYN3PPqSk6q3A3cPdwe6QXiDoqeumX5wF2X3u)). The cap itself is covered by the `over_cap` unit test (`cd executor && cargo test`).
+
+**Steps (testnet):**
+1. Stop the agent so it doesn't settle the task first (`pkill -f run-agent.sh`).
+2. In the demo DAO, create a proposal with a cap, e.g. "Donate 0.1 NEAR to the Water Project", and pass it with a council wallet. Sputnik calls `dispatch_task` with 0.1 NEAR escrow.
+3. Find the task id: `near contract call-function as-read-only exec.lisdao-v2-1793741346.testnet pending_tasks json-args '{}' network-config testnet now`.
+4. As the agent, report more than the cap:
+   `near contract call-function as-transaction exec.lisdao-v2-1793741346.testnet report_payout json-args '{"task_id":<ID>,"receiver_id":"lisdao-voter-1793741346.testnet","amount":"200000000000000000000000","report":"limit test: 0.2 NEAR over a 0.1 NEAR cap"}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as lisdao-agent-1793741346.testnet network-config testnet sign-with-legacy-keychain send`
+5. Expected: the transaction fails with `Smart contract panicked: over spending cap`; the task stays `Executing` with its full escrow (`get_task`).
+6. Settle it: restart the agent (it completes the task normally), or call `report_result` with `success:false` to refund the escrow to the DAO.
+
 ## Reporting
 Open a GitHub issue (or contact the maintainer privately for anything sensitive).

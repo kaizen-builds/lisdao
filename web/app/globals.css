@@ -123,3 +123,6 @@ th{text-align:left;font-size:12px;color:var(--muted);padding:8px;border-bottom:1
  .kv{flex-direction:column;gap:2px}.kv b{width:auto}.agent{left:8px;right:8px;width:auto;top:64px;bottom:8px}.shot{max-height:30vh}.screen{padding:12px}.st em{display:none}.st.now em{display:inline}.navlink{font-size:13px}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}html{scroll-behavior:auto}}
 .help+h2{margin-top:16px}.panel>.link{padding:0}
+.limits{margin-top:16px}.limits h3{margin:0 0 4px}
+.policy{display:grid;gap:4px;padding:12px;border-radius:10px;margin:12px 0;border:1px solid var(--line);overflow-wrap:anywhere}
+.policy.ok{background:var(--ok-bg);color:var(--ok)}.policy.warn{background:#fff4e5;color:#8a4b00}.policy.muted{color:var(--muted)}

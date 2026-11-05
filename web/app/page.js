@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Drop, Wordmark } from "./Logo";
 import { VoteArt, WorkArt, PayArt } from "./Sticks";
 import { loadSputnik, isSputnik, viewAt, rpcCall, DEMO_SPUTNIK, EXECUTOR, FACTORY } from "../lib/sputnik";
+import { autoTier, policyCheck, nearStr } from "../lib/policy";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
 const AGENT = process.env.NEXT_PUBLIC_AGENT_ID || "lisdao-agent-1793741346.testnet";
@@ -78,6 +79,32 @@ function Agent({ dao, p, onClose }) {
 }
 
 const STAGES = ["Demo", "Proposal", "Vote", "Agent", "Paid"];
+
+// Live spending limits read from the executor contract (get_config + reputation), via /api/rpc.
+const NBA = a => `https://testnet.nearblocks.io/address/${a}`;
+function useLimits(proposer) {
+  const [s, setS] = useState(null);
+  useEffect(() => { let on = true; (async () => { try {
+    const [cfg, rep] = await Promise.all([viewAt(EXECUTOR, "get_config"), proposer ? viewAt(EXECUTOR, "reputation", { account_id: proposer }) : 0]);
+    if (on) setS({ cfg, rep, tier: autoTier(cfg, rep) }); } catch { if (on) setS({ err: true }); } })(); return () => { on = false; }; }, [proposer]);
+  return s;
+}
+function Limits({ proposer }) {
+  const s = useLimits(proposer);
+  return <div className="box limits" aria-label="Spending limits"><h3>Spending limits <span className="muted small">· live from <a href={NBA(EXECUTOR)} target="_blank" rel="noopener noreferrer">{short(EXECUTOR)}</a></span></h3>
+    {!s ? <p className="muted">Reading the contract…</p> : s.err ? <p className="muted">Could not read the contract right now.</p> : <div className="facts">
+      {[["Per-payout cap", "The amount voted in the proposal (max_spend). Higher payouts are refused on-chain."],
+        ["Auto-approve tier", `Starts at ${nearStr(s.cfg.base_cap)}, +${nearStr(s.cfg.rep_step)} per finished task, max ${nearStr(s.cfg.max_auto)}. Above it: council Transfer vote.`],
+        ...(proposer ? [[`Tier for ${short(proposer)}`, `${nearStr(s.tier)} (${s.rep} finished task${s.rep === 1 ? "" : "s"})`]] : []),
+        ["Only agent that can report", s.cfg.agent], ["Who can dispatch", `Sputnik DAOs (*.${s.cfg.factory}) through a passed vote`], ["Tasks so far", String(s.cfg.tasks)]]
+        .map(([k, v]) => <div className="kv" key={k}><b>{k}</b><span>{v}</span></div>)}</div>}</div>;
+}
+function PolicyCheck({ p }) {
+  const s = useLimits(p.proposer);
+  if (!p.action.AgentTask || !s || s.err) return null;
+  const r = policyCheck({ maxSpend: p.action.AgentTask.max_spend, tier: s.tier, task: p.task });
+  return <div className={"policy " + r.tone} role="status"><b>Policy check: {r.label}</b><span>{r.detail}</span></div>;
+}
 function Stepper({ at }) {
   return <div className="stepper" aria-label="Progress">{STAGES.map((n, i) =>
     <div key={n} className={"st" + (i < at || at >= STAGES.length ? " done" : "") + (i === Math.min(at, STAGES.length - 1) ? " now" : "")}><span>{i < at ? "✓" : i + 1}</span><em>{n}</em></div>)}</div>;
@@ -244,7 +271,7 @@ export default function Home() {
         <li>Auto-pay starts at 0.2 NEAR and caps at 1 NEAR. Bigger payouts go back to a vote.</li></ul></div>
       <div className="box"><h3>What it doesn't do yet</h3><ul>
         <li>Testnet only. One agent run by one operator.</li><li>The contract trusts the payee the agent reports, within the cap.</li>
-        <li>No timeout refund yet.</li></ul></div></div></section>
+        <li>No timeout refund yet.</li></ul></div></div><Limits /></section>
 
     <section className="cta" aria-labelledby="cta-title"><h2 id="cta-title">Create a task. Vote yes. Watch the agent.</h2>
       <button className="btn p big" onClick={() => open(DEMO_SPUTNIK)}>Open the demo</button></section>
@@ -363,6 +390,7 @@ export default function Home() {
           {p.status === "Executed" && <Next>Done. The DAO paid on-chain {p.result && <span className="muted"> · see receipt below</span>}</Next>}
           {p.status === "Approved" && <Next>Passed. Execute the transfer</Next>}
           <p className="muted">{p.action.AgentTask ? `${p.action.AgentTask.instructions} · cap ${yocto(p.action.AgentTask.max_spend)} NEAR` : p.action.Other ? `Sputnik ${p.action.Other} proposal` : `${p.escalatedFrom ? "Escalated by the AI executor · " : ""}Transfer ${yocto(p.action.Transfer.amount)} NEAR to ${p.action.Transfer.receiver_id}`}</p>
+          <PolicyCheck p={p} />
           <div className="facts">
             {[["Status", p.status === "Active" ? "Voting In Progress" : p.status === "Executing" ? "Passed · Agent executing in browser" : p.status === "Executed" ? "Passed · Executed" : p.status === "Escalated" ? "Passed · payout sent to council vote" : p.status],
               ["Created", fmt(BigInt(p.deadline_ns) - BigInt(dao.voting_period_ns))], ["Voting Ends", fmt(p.deadline_ns)], ["Created by", p.proposer]]
@@ -376,7 +404,9 @@ export default function Home() {
           {p.status === "Approved" && <button className="btn p full" disabled={busy} onClick={() => call("execute", { dao_id: dao.id, proposal_id: p.id })}>{busy ? "Executing..." : "Execute transfer"}</button>}
           {(p.action.AgentTask && ["Executing", "Executed", "Failed", "Escalated"].includes(p.status)) && !agent && <button className="btn p full big" onClick={() => { setDismissed(null); setAgent(true); }}>View Agent Execution</button>}
           <div className="links">{lastTx && lastTx !== "e2e" && <a href={TX(lastTx)} target="_blank" rel="noopener noreferrer">{lastKind === "add_proposal" ? "Proposal created tx ↗" : lastKind === "act_proposal" ? "Vote tx ↗" : "Transaction ↗"}</a>}
-            {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank" rel="noopener noreferrer">Proposal #{p.id} on the DAO ↗</a>}</div>
+            {dao.sputnik && !p.optimistic && <a href={`https://testnet.nearblocks.io/address/${dao.id}`} target="_blank" rel="noopener noreferrer">Proposal #{p.id} on the DAO ↗</a>}
+            {p.task && <a href={NBA(EXECUTOR)} target="_blank" rel="noopener noreferrer">Audit trail: executor task #{p.task.id} ↗</a>}</div>
+          {p.action.AgentTask && <Limits proposer={p.proposer} />}
           {p.result && <div className="receipt"><b>Agent report (on-chain):</b> {p.result}</div>}
         </>}
       </div></div>{foot}</>;
