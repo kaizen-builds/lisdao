@@ -245,6 +245,7 @@ export default function Home() {
       <p className="lsub">Members vote on a task in plain words. The agent does it in a real browser. A NEAR contract pays, within limits.</p>
       <button className="btn p big" onClick={() => open(DEMO_SPUTNIK)}>Try the demo</button>
       <p className="note">Testnet only. No real money.</p>
+      <a className="link" href="/demo.mp4" target="_blank" rel="noopener noreferrer">▶ Watch the demo (2 min)</a>
       <button className="link" aria-expanded={adv} onClick={() => setAdv(!adv)}>Advanced {adv ? "▴" : "▾"}</button>
       {adv && <div className="stack"><button className="btn full" onClick={() => setPane("create-dao")}>Create New DAO</button>
       <button className="btn full" onClick={() => { const a = prompt("Paste the address of a Sputnik DAO on testnet, e.g. lisdao-demo.sputnikv2.testnet", ""); if (a && isSputnik(a.trim())) open(a.trim()); else if (a) flash("Enter an address ending in .sputnikv2.testnet"); }}>Open my Sputnik DAO</button></div>}

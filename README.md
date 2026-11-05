@@ -7,7 +7,7 @@
 
 > **Testnet only.** No mainnet deployment and no real money. The "Water Project" charity is a demo page in this repo.
 
-> **TODO: demo video link coming.** (Not published yet.)
+> **▶ Demo video (2 min):** https://lisdao.vercel.app/demo.mp4
 
 ## What it is
 LisDao is an AI executor for **Sputnik DAO v2**. A DAO member writes a task in plain words ("Donate 0.1 NEAR to the water project"). The council votes in Sputnik. When the vote passes, the voted amount moves into escrow in the LisDao executor contract, an AI agent carries the task out in a real browser, and the **contract** (not the agent) pays, within spending limits enforced on-chain.
@@ -97,11 +97,10 @@ flowchart LR
 - **Agents / open:** an AI agent doing real web work with on-chain consequences; MIT licensed, runnable locally.
 
 ## Built during the hackathon
-- Repo history starts **2026-11-03** (`1eb0b33`, "LisDAO NEAR MVP: contract, web, agent", 14 files). Everything since is in this repo's history: 62 commits, through 2026-11-05.
-- Added after that first commit: Sputnik DAO v2 integration and the executor's escrow/tier/escalation design, NEAR AI Cloud as the live model, exact-match payee checks, the Live browser view and on-screen agent overlay, wallet-selector with more wallets, the live Spending limits panel and per-proposal policy check, CI (contract tests + web tests + build).
-- `legacy/contract/` is the earlier all-in-one prototype from the first commit; it is not used.
+- The hackathon was announced on 2026-10-19. This project was built entirely after that: the repo's first commit is dated 2026-11-03, and all work is in this repo's public git history.
+- Built in that window: the executor contract (escrow, voted cap, reputation tiers, escalation to a Sputnik Transfer vote), the Sputnik DAO v2 integration, the browser agent on NEAR AI Cloud with exact-match payee checks, the Live browser view and agent overlay, wallet-selector with several NEAR wallets, the live Spending limits panel and per-proposal policy check, and CI (contract tests, web tests, build).
+- `legacy/contract/` is an earlier all-in-one prototype from the first commit; it is not used.
 
-<a id="quickstart"></a>
 ## Quickstart
 ```bash
 # 1. Contract tests (4 tests: happy path + tiers/escalation, and 3 negative tests)
