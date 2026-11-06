@@ -24,7 +24,7 @@ pub enum Status { Executing, Executed, Escalated, Failed }
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone, Debug)]
-pub enum Action { AgentTask { instructions: String, max_spend: NearToken } }
+pub enum Action { AgentTask { instructions: String, max_spend: NearToken, expected_receiver: Option<AccountId> } }
 
 #[near(serializers = [json, borsh])]
 #[derive(Clone)]
@@ -68,14 +68,18 @@ impl Executor {
     /// FunctionCall proposal passes. Attached deposit is the task's escrow.
     #[payable]
     pub fn dispatch_task(&mut self, title: String, instructions: String, max_spend: NearToken,
-                         proposer: AccountId, proposal_id: Option<u64>) -> u32 {
+                          proposer: AccountId, proposal_id: Option<u64>, expected_receiver: Option<AccountId>) -> u32 {
         let dao = env::predecessor_account_id();
         require!(dao.as_str().ends_with(&format!(".{}", self.factory)), "only a Sputnik DAO can dispatch");
         require!(env::attached_deposit() >= max_spend && max_spend.as_yoctonear() > 0, "attach max_spend as escrow");
         require!(instructions.len() <= 500 && title.len() <= 120, "too long");
+        if let Some(receiver) = expected_receiver.clone() {
+            require!(receiver.as_str().ends_with(".testnet") || receiver.as_str().ends_with(".near"), "expected receiver must be a valid NEAR account");
+        }
         let id = self.tasks.len();
         self.tasks.push(Task { id, dao: dao.clone(), proposal_id, proposer, title,
-            action: Action::AgentTask { instructions, max_spend }, escrow: env::attached_deposit(),
+            action: Action::AgentTask { instructions, max_spend, expected_receiver },
+            escrow: env::attached_deposit(),
             status: Status::Executing, result: None, created_ns: env::block_timestamp() });
         env::log_str(&format!("EVENT agent_task {dao} {id}"));
         id
@@ -85,7 +89,14 @@ impl Executor {
     pub fn report_payout(&mut self, task_id: u32, receiver_id: AccountId, amount: NearToken, report: String) -> Promise {
         require!(env::predecessor_account_id() == self.agent, "only agent");
         require!(report.len() <= 1000, "report too long");
-        let cap = self.auto_cap_of(&self.tasks.get(task_id).expect("no task").proposer.clone());
+        let task = self.tasks.get(task_id).expect("no task").clone();
+        let expected_receiver = match &task.action {
+            Action::AgentTask { expected_receiver, .. } => expected_receiver.clone(),
+        };
+        if let Some(expected) = expected_receiver {
+            require!(receiver_id == expected, "receiver mismatch");
+        }
+        let cap = self.auto_cap_of(&task.proposer.clone());
         let bond = self.bond;
         let t = self.tasks.get_mut(task_id).expect("no task");
         require!(t.status == Status::Executing, "not executing");
@@ -155,27 +166,43 @@ mod tests {
     #[test] fn flow_and_tiers() {
         let mut c = mk();
         ctx("d.sputnikv2.testnet", n(100));
-        let id = c.dispatch_task("t".into(), "donate 0.1 NEAR".into(), n(100), "k.testnet".parse().unwrap(), Some(3));
+        let id = c.dispatch_task("t".into(), "donate 0.1 NEAR".into(), n(100), "k.testnet".parse().unwrap(), Some(3), None);
         ctx("agent.testnet", NearToken::from_yoctonear(0));
         c.report_payout(id, "x.testnet".parse().unwrap(), n(100), "ok".into());
         assert_eq!(c.get_task(id).unwrap().status, Status::Executed);
         assert_eq!(c.reputation("k.testnet".parse().unwrap()), 1);
         assert_eq!(c.auto_cap("k.testnet".parse().unwrap()), n(300));
         ctx("d.sputnikv2.testnet", n(500));
-        let id2 = c.dispatch_task("t".into(), "donate 0.5 NEAR".into(), n(500), "k.testnet".parse().unwrap(), None);
+        let id2 = c.dispatch_task("t".into(), "donate 0.5 NEAR".into(), n(500), "k.testnet".parse().unwrap(), None, None);
         ctx("agent.testnet", NearToken::from_yoctonear(0));
         c.report_payout(id2, "x.testnet".parse().unwrap(), n(500), "ok".into());
         assert_eq!(c.get_task(id2).unwrap().status, Status::Escalated);
     }
-    #[test] #[should_panic(expected = "only a Sputnik DAO")] fn not_dao() { let mut c = mk(); ctx("evil.testnet", n(100)); c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None); }
+    #[test] fn flow_with_expected_receiver() {
+        let mut c = mk();
+        ctx("d.sputnikv2.testnet", n(100));
+        let id = c.dispatch_task("t".into(), "pay friend.testnet 0.1 NEAR".into(), n(100), "k.testnet".parse().unwrap(), None, Some("friend.testnet".parse().unwrap()));
+        ctx("agent.testnet", NearToken::from_yoctonear(0));
+        c.report_payout(id, "friend.testnet".parse().unwrap(), n(100), "ok".into());
+        assert_eq!(c.get_task(id).unwrap().status, Status::Executed);
+    }
+    #[test] #[should_panic(expected = "receiver mismatch")] fn receiver_mismatch() {
+        let mut c = mk();
+        ctx("d.sputnikv2.testnet", n(100));
+        let id = c.dispatch_task("t".into(), "pay friend.testnet 0.1 NEAR".into(), n(100), "k.testnet".parse().unwrap(), None, Some("friend.testnet".parse().unwrap()));
+        ctx("agent.testnet", NearToken::from_yoctonear(0));
+        c.report_payout(id, "other.testnet".parse().unwrap(), n(100), "wrong".into());
+    }
+    #[test] #[should_panic(expected = "only a Sputnik DAO")] fn not_dao() { let mut c = mk(); ctx("evil.testnet", n(100)); c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None, None); }
     #[test] #[should_panic(expected = "over spending cap")] fn over_cap() {
         let mut c = mk(); ctx("d.sputnikv2.testnet", n(100));
-        let id = c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None);
+        let id = c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None, None);
         ctx("agent.testnet", NearToken::from_yoctonear(0)); c.report_payout(id, "x.testnet".parse().unwrap(), n(101), "".into());
     }
     #[test] #[should_panic(expected = "only agent")] fn not_agent() {
         let mut c = mk(); ctx("d.sputnikv2.testnet", n(100));
-        let id = c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None);
+        let id = c.dispatch_task("t".into(), "i".into(), n(100), "k.testnet".parse().unwrap(), None, None);
         ctx("k.testnet", NearToken::from_yoctonear(0)); c.report_payout(id, "x.testnet".parse().unwrap(), n(100), "".into());
     }
 }
+
