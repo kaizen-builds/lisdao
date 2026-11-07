@@ -3,8 +3,9 @@
 Watches the LisDao contract for proposals that just passed (status Executing),
 then drives a real Chromium browser with a vision LLM loop:
   screenshot -> LLM picks one action (JSON) -> highlight + act -> screenshot -> LLM verifies.
-When it reaches the charity's one-time deposit address it extracts it (LLM + DOM +
-Tesseract OCR cross-check) and calls report_payout; the contract pays from the treasury.
+When it reaches the charity's one-time deposit address it reads it from #deposit-address
+(the vision model's read must match exactly; OCR is advisory) and calls report_payout;
+the contract pays from the escrowed max_spend.
 
 Env: CONTRACT_ID, AGENT_ID, CHARITY_URL, FEED_URL, LLM_BASE_URL, LLM_API_KEY, LLM_MODEL,
      LLM_PROVIDER (nearai -> NEARAI_API_KEY, NEARAI_MODEL), LLM_TIMEOUT, LLM_RETRIES,
