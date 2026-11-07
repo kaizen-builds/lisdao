@@ -5,7 +5,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --test test/ratelimit.test.mjs test/policy.test.mjs"
+    "test": "node --test test/ratelimit.test.mjs test/policy.test.mjs test/app-page.test.mjs"
   },
   "dependencies": {
     "@near-wallet-selector/bitte-wallet": "^10.1.4",
