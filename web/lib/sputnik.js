@@ -4,12 +4,6 @@ export const FACTORY = "sputnikv2.testnet";
 export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_ID || "exec.lisdao-v2-1793741346.testnet";
 export const DEMO_SPUTNIK = process.env.NEXT_PUBLIC_SPUTNIK_DAO || "lisdao-demo.sputnikv2.testnet";
 export const FEED_DAO = 9000; // live feed key for executor tasks
-
-export function parseExpectedReceiver(text = "") {
-  const match = String(text).match(/\b[a-z0-9][a-z0-9._-]*\.(?:testnet|near)\b/i);
-  return match ? match[0].toLowerCase() : null;
-}
-
 // All browser reads go through our same-origin /api/rpc proxy (no CORS, server-side RPC fallback).
 export async function rpcCall(method, params) {
   const errs = [];
@@ -46,7 +40,7 @@ export async function loadSputnik(id, cache = {}) {
   const props = list.map(x => {
     const fc = x.kind.FunctionCall, tr = x.kind.Transfer; let action, task;
     const dispatch = fc && fc.receiver_id === EXECUTOR && fc.actions.find(a => a.method_name === "dispatch_task");
-    if (dispatch) { const a = b64json(dispatch.args); action = { AgentTask: { instructions: a.instructions || x.description, max_spend: a.max_spend || dispatch.deposit, expected_receiver: a.expected_receiver || null } };
+    if (dispatch) { const a = b64json(dispatch.args); action = { AgentTask: { instructions: a.instructions || x.description, max_spend: a.max_spend || dispatch.deposit } };
       task = tasks.find(t => t.proposal_id === x.id) || tasks.find(t => t.title === a.title && !t.proposal_id && t.proposal_id !== 0); }
     else if (tr) action = { Transfer: { receiver_id: tr.receiver_id, amount: tr.amount } };
     else action = { Other: Object.keys(x.kind)[0] };
@@ -60,4 +54,3 @@ export async function loadSputnik(id, cache = {}) {
   });
   return { dao, props, policy };
 }
-
