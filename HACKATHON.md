@@ -27,6 +27,7 @@ Before submitting, confirm all of the following:
 3. The demo uses a real NEAR testnet DAO and executor contract.
 4. The README clearly separates what is enforced on-chain from what remains operator-trusted off-chain.
 5. The project is mapped to the intended track and uses the NEAR ecosystem appropriately.
+6. A judge cloning `main` sees the full app, not a placeholder shell: `cd executor && cargo test` and `cd web && npm test` both pass. CI fails if `web/app/page.js` loses the wallet, demo DAO, proposal, live browser, or limits UI.
 
 ## Demo path judges can verify
 
@@ -46,10 +47,13 @@ This is a strong testnet prototype, not a production financial system. The READM
 
 This honesty is useful to judges because it shows the project understands the security boundary and where the next iteration would improve it.
 
-## Recommended final layers before submission
+## Remaining work (not just polish)
 
-- Keep the demo and transaction links current.
-- Include a clean “How to run” path for a fresh environment.
-- Ensure the repo story is simple enough for a judge to evaluate in under 5 minutes.
+The next real improvements are listed in `docs/SECURITY.md` and `docs/ROADMAP.md`. They are contract and trust-model work, not cosmetic polish:
 
-This project is an AI-agent submission prototype; the remaining work is mainly polish, tighter security language, and clear evidence for the judge.
+- The vote does not bind the payout receiver; the contract pays the address the agent reports, within the cap.
+- `report_payout` records `Executed` before the transfer finishes, with no callback to reconcile a failed payment.
+- There is no timeout or cancel, so escrow can sit in the executor if the agent stops.
+- A single operator runs the agent account; there is no TEE or independent attestation.
+
+Before submission, keep the demo and transaction links current, keep a clean “How to run” path, and make sure a judge cloning `main` sees the same full app as the live demo.
