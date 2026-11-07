@@ -29,6 +29,7 @@ Live app: **https://lisdao.vercel.app** · demo DAO: **`lisdao-demo.sputnikv2.te
 | (Wallet needed) Connect a testnet wallet, **Create New Proposal**, vote Yes as a council member | A new task is dispatched; the agent (when the operator's agent is online) runs it in the Live browser view. Proposing costs a 0.01 NEAR bond; only council members' votes count |
 | (No wallet) `cd executor && cargo test` | 4 contract tests pass, including `over_cap` (payout above the voted cap panics `over spending cap`) and `not_agent` |
 | (No wallet) `cd web && npm test` | Web unit tests pass, including a check that `web/app/page.js` is the full wallet / demo / limits app, not a placeholder shell |
+| (No wallet) `cd agent && python -m unittest discover -s tests -v` | Agent unit tests pass, including the exact-match `#deposit-address` check |
 
 ## How it works
 ```mermaid
@@ -132,8 +133,10 @@ AGENT_PYTHON=$(which python3) ./run-agent.sh; cd ..   # any OpenAI-compatible vi
 # OCR: tesseract.js downloads eng.traineddata on first run and caches it in agent/.
 # To fetch it ahead of time (from repo root): ./agent/fetch-ocr-data.sh
 
-# 4. Tests: web unit tests (rate limiter, spending-policy check, root-page integrity) and UI checks (Playwright, mocked wallet via ?e2e=1)
+# 4. Tests: web unit tests (rate limiter, spending-policy check, root-page integrity), agent unit tests, and UI checks (Playwright, mocked wallet via ?e2e=1)
 (cd web && npm test)   # root-page integrity fails if Copilot/another edit replaces web/app/page.js with a placeholder shell
+# Agent unit tests (no Chromium install; `pip install playwright` is enough because browser_agent imports the package)
+(cd agent && python -m unittest discover -s tests -v)
 pip install playwright && playwright install chromium
 python web/e2e-buttons.py http://localhost:3000/   # from repo root, against a running web app
 ```
