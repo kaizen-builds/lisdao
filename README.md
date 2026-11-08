@@ -7,7 +7,6 @@
 
 > **Testnet only.** No mainnet deployment and no real money. The "Water Project" charity is a demo page in this repo.
 
-> **▶ Demo video (2 min):** https://lisdao.vercel.app/demo.mp4
 
 ## What it is
 LisDao is an AI executor for **Sputnik DAO v2**. A DAO member writes a task in plain words ("Donate 0.1 NEAR to the water project"). The council votes in Sputnik. When the vote passes, the voted amount moves into escrow in the LisDao executor contract, an AI agent carries the task out in a real browser, and the **contract** (not the agent) pays, within spending limits enforced on-chain.
