@@ -4,7 +4,7 @@ import QRCode from "qrcode";
 import "./charity.css";
 
 export default function Charity() {
-  const [step, setStep] = useState(1); const [asset, setAsset] = useState("BTC"); const [amount, setAmount] = useState("25");
+  const [step, setStep] = useState(1); const [asset, setAsset] = useState("NEAR"); const [amount, setAmount] = useState("25");
   const [addr, setAddr] = useState(null); const [busy, setBusy] = useState(false); const [qr, setQr] = useState(null);
   async function finish() {
     setBusy(true);
@@ -60,11 +60,9 @@ export default function Charity() {
             {step === 1 && <>
               <label htmlFor="asset"><b>Select Cryptocurrency</b></label>
               <select id="asset" name="asset" aria-label="Select Cryptocurrency" value={asset} onChange={e => setAsset(e.target.value)}>
-                <option value="BTC">Bitcoin (BTC)</option>
-                <option value="ETH">Ethereum (ETH)</option>
-                <option value="USDC">USD Coin (USDC)</option>
                 <option value="NEAR">NEAR Protocol (NEAR)</option>
               </select>
+              <p className="wp-note">This demo accepts NEAR on testnet. The agent types the amount from the proposal.</p>
               <label htmlFor="amount"><b>Donation Amount</b></label>
               <input id="amount" name="amount" aria-label="Donation Amount" value={amount} onChange={e => setAmount(e.target.value)} />
               <button onClick={() => setStep(2)}>Next Step</button>
