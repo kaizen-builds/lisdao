@@ -52,9 +52,9 @@ Already on-chain: `report_payout` from a non-agent account fails `only agent`, n
 **Steps (testnet):**
 1. Stop the agent so it doesn't settle the task first (`pkill -f run-agent.sh`).
 2. In the demo DAO, create a proposal with a cap, e.g. "Donate 0.1 NEAR to the Water Project", and pass it with a council wallet. Sputnik calls `dispatch_task` with 0.1 NEAR escrow.
-3. Find the task id: `near contract call-function as-read-only exec.lisdao-v2-1793741346.testnet pending_tasks json-args '{}' network-config testnet now`.
+3. Find the task id: `near contract call-function as-read-only lisdao-exec-1794181088.testnet pending_tasks json-args '{}' network-config testnet now`.
 4. As the agent, report more than the cap:
-   `near contract call-function as-transaction exec.lisdao-v2-1793741346.testnet report_payout json-args '{"task_id":<ID>,"receiver_id":"lisdao-voter-1793741346.testnet","amount":"200000000000000000000000","report":"limit test: 0.2 NEAR over a 0.1 NEAR cap"}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as lisdao-agent-1793741346.testnet network-config testnet sign-with-legacy-keychain send`
+   `near contract call-function as-transaction lisdao-exec-1794181088.testnet report_payout json-args '{"task_id":<ID>,"receiver_id":"lisdao-voter-1793741346.testnet","amount":"200000000000000000000000","report":"limit test: 0.2 NEAR over a 0.1 NEAR cap"}' prepaid-gas '100 Tgas' attached-deposit '0 NEAR' sign-as lisdao-agent-1794181088.testnet network-config testnet sign-with-legacy-keychain send`
 5. Expected: the transaction fails with `Smart contract panicked: over spending cap`; the task stays `Executing` with its full escrow (`get_task`).
 6. Settle it: restart the agent (it completes the task normally), or call `report_result` with `success:false` to refund the escrow to the DAO.
 
