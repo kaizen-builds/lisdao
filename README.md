@@ -23,7 +23,7 @@ Live app: **https://lisdao.vercel.app** · demo DAO: **`lisdao-demo.sputnikv2.te
 | Open the live app, scroll to **Limits** | A **Spending limits** panel read live from the executor contract (`get_config`): auto-approve tier start / step / max, the only agent account allowed to report, who can dispatch, task count |
 | Click **Try the demo** | The demo DAO's proposals, read live from Sputnik (`get_proposals`) and the executor (`get_tasks`) |
 | Open proposal **#11** ("Donate 0.1 NEAR to the Water Project") | Status `Passed · Executed`, a **Policy check: Within limit** box, the proposer's current tier, the on-chain agent report with the one-time address, and an **Audit trail** link to the executor's transactions |
-| Click **View Agent Execution** | The **Live browser** panel: the agent's screenshots and each highlighted step it took |
+| Click **View Agent Execution** | The **Live browser** panel: the agent's screenshots and each step it took |
 | Open the payout tx for #11: [6rt1nGof…](https://testnet.nearblocks.io/txns/6rt1nGofX9Hb2zBxnWSb6V3vuKPpAm1w64N5NzQ2GvkQ) | `report_payout` by the agent account to the executor; the 0.1 NEAR transfer to the deposit address is a receipt inside it |
 | (Wallet needed) Connect a testnet wallet, **Create New Proposal**, vote Yes as a council member | A new task is dispatched; the agent (when the operator's agent is online) runs it in the Live browser view. Proposing costs a 0.01 NEAR bond; only council members' votes count |
 | (No wallet) `cd executor && cargo test` | 4 contract tests pass, including `over_cap` (payout above the voted cap panics `over spending cap`) and `not_agent` |
