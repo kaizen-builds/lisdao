@@ -1,7 +1,7 @@
 // Sputnik DAO v2 adapter: reads a Sputnik DAO + the LisDao executor and maps
 // them to the same shapes the UI uses for proposals.
 export const FACTORY = "sputnikv2.testnet";
-export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_ID || "exec.lisdao-v2-1793741346.testnet";
+export const EXECUTOR = process.env.NEXT_PUBLIC_EXECUTOR_ID || "lisdao-exec-1794181088.testnet";
 export const DEMO_SPUTNIK = process.env.NEXT_PUBLIC_SPUTNIK_DAO || "lisdao-demo.sputnikv2.testnet";
 export const FEED_DAO = 9000; // live feed key for executor tasks
 // All browser reads go through our same-origin /api/rpc proxy (no CORS, server-side RPC fallback).
