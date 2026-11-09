@@ -19,9 +19,9 @@ from playwright.sync_api import sync_playwright
 
 E = os.environ.get
 CONTRACT = E("CONTRACT_ID", "lisdao-v2-1793741346.testnet")
-EXECUTOR = E("EXECUTOR_ID", "exec.lisdao-v2-1793741346.testnet")  # Sputnik DAO executor
+EXECUTOR = E("EXECUTOR_ID", "lisdao-exec-1794181088.testnet")  # Sputnik DAO executor
 SPUTNIK_FEED = 9000  # live-feed key for executor tasks: feed/9000-<task_id>
-AGENT = E("AGENT_ID", "lisdao-agent-1793741346.testnet")
+AGENT = E("AGENT_ID", "lisdao-agent-1794181088.testnet")
 WEB = E("WEB_URL", "http://localhost:3000")
 CHARITY = E("CHARITY_URL", WEB + "/demo-charity")
 FEED = E("FEED_URL", WEB + "/api/agent")
