@@ -2,7 +2,7 @@
 
 Watches the LisDao contract for proposals that just passed (status Executing),
 then drives a real Chromium browser with a vision LLM loop:
-  screenshot -> LLM picks one action (JSON) -> highlight + act -> screenshot -> LLM verifies.
+  screenshot -> LLM picks one action (JSON) -> act -> screenshot -> LLM verifies.
 When it reaches the charity's one-time deposit address it reads it from #deposit-address
 (the vision model's read must match exactly; OCR is advisory) and calls report_payout;
 the contract pays from the escrowed max_spend.
@@ -11,8 +11,8 @@ Env: CONTRACT_ID, AGENT_ID, CHARITY_URL, FEED_URL, LLM_BASE_URL, LLM_API_KEY, LL
      LLM_PROVIDER (nearai -> NEARAI_API_KEY, NEARAI_MODEL), LLM_TIMEOUT, LLM_RETRIES,
      AGENT_FEED_TOKEN, RECORD_DIR, HEADLESS, ONCE, DRY_RUN (or --dry-run).
 Recording: RECORD=1 saves a Playwright video of the agent's browser tab (charity origin only) to RECORD_DIR
-     (default /workspace/recordings); SHOT_DIR saves each highlighted step as a PNG; STEP_PAUSE_MS sets how long
-     each highlight stays on screen (default 700, 1200 when recording). See scripts/record-run.sh.
+     (default /workspace/recordings); SHOT_DIR saves a PNG of each step; STEP_PAUSE_MS sets how long
+     each step stays on screen before the click (default 700, 1200 when recording). See scripts/record-run.sh.
 """
 import base64, difflib, json, os, re, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright
@@ -57,9 +57,9 @@ VIEW = {"width": int(E("VIEW_W", "1280")), "height": int(E("VIEW_H", "800"))}  #
 RECORD = E("RECORD") == "1"
 RECORD_DIR = E("RECORD_DIR") or ("/workspace/recordings" if RECORD else None)
 SHOT_DIR = E("SHOT_DIR")
-# Visible fake mouse pointer for recordings: glides to each target, ripple on click. Default on when RECORD=1 or HEADLESS=0.
-CURSOR_OVERLAY = E("CURSOR_OVERLAY", "1" if (E("RECORD") == "1" or E("HEADLESS", "1") == "0") else "0") == "1"
-STEP_PAUSE = int(E("STEP_PAUSE_MS", "1200" if RECORD else "700"))  # highlight hold time so a viewer can read each step
+# Visible mouse pointer so the live browser looks like someone operating the page. No labels or highlight boxes.
+CURSOR_OVERLAY = E("CURSOR_OVERLAY", "1") == "1"
+STEP_PAUSE = int(E("STEP_PAUSE_MS", "1200" if RECORD else "700"))  # brief pause so a viewer can follow the cursor
 ACCOUNT_RE = re.compile(r"\b([0-9a-f]{64}|(?:[a-z0-9_-]+\.)+(?:testnet|near))\b")
 
 def post(url, body, headers={}, timeout=60):
@@ -105,35 +105,17 @@ ELEMENTS_JS = """() => { let i = 0; const out = [];
     out.push({ id: i, dom_id: el.id || undefined, tag: el.tagName.toLowerCase(), label: el.getAttribute('aria-label') || el.innerText?.slice(0, 80) || el.placeholder || '',
       value: el.value ?? null, options: el.tagName === 'SELECT' ? [...el.options].map(o => o.value + '=' + o.text) : undefined }); });
   return out; }"""
-# Agent overlay (drawn by LisDao, not page content): numbered pulsing orange ring on the chosen element,
-# a short label next to it, and a bottom banner "LisDao agent · step N · action". Text is set with textContent only.
+# Scroll the chosen element into view. Overlays (boxes, numbered pills, tooltips, banners) were
+# removed so the live browser looks like someone operating the page, not a labeled demo.
 HIGHLIGHT_JS = """([id, n, total, label]) => { const el = document.querySelector(`[data-lis="${id}"]`); if (!el) return;
-  el.scrollIntoView({ block: 'center', inline: 'nearest' }); const r = el.getBoundingClientRect();
-  if (!document.getElementById('lis-style')) { const s = document.createElement('style'); s.id = 'lis-style';
-    s.textContent = '@keyframes lispulse{0%{box-shadow:0 0 0 0 rgba(232,101,10,.55)}100%{box-shadow:0 0 0 14px rgba(232,101,10,0)}}' +
-      '.lis-hl{position:fixed;pointer-events:none;z-index:2147483646;font:600 14px/1.3 system-ui,-apple-system,Segoe UI,sans-serif}';
-    document.head.appendChild(s); }
-  const mk = css => { const d = document.createElement('div'); d.className = 'lis-hl'; d.style.cssText = css; document.body.appendChild(d); return d; };
-  mk(`left:${r.left-5}px;top:${r.top-5}px;width:${r.width+10}px;height:${r.height+10}px;border:3px solid #E8650A;border-radius:10px;background:rgba(232,101,10,.08);animation:lispulse 1s ease-out infinite`);
-  const b = mk(`left:${Math.max(4, r.left-16)}px;top:${Math.max(4, r.top-16)}px;width:28px;height:28px;border-radius:50%;background:#E8650A;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.25)`);
-  b.textContent = String(n);
-  const right = r.right + 350 < innerWidth, below = r.bottom + 90 < innerHeight;
-  const t = mk(`left:${right ? r.right + 14 : Math.min(Math.max(4, r.left), innerWidth - 340)}px;top:${right ? r.top + r.height / 2 - 16 : below ? r.bottom + 12 : Math.max(8, r.top - 44)}px;max-width:330px;background:#141A33;color:#fff;padding:6px 10px;border-radius:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 4px 12px rgba(0,0,0,.25)`);
-  t.textContent = label;
-  const bn = mk(`left:50%;transform:translateX(-50%);bottom:16px;height:40px;max-width:calc(100% - 32px);border-radius:999px;box-shadow:0 6px 18px rgba(0,0,0,.3);background:#141A33;color:#fff;display:flex;align-items:center;gap:10px;padding:0 18px;font-weight:500`);
-  const dot = document.createElement('span'); dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#E8650A;flex:none'; bn.appendChild(dot);
-  const tx = document.createElement('span'); tx.style.cssText = 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  tx.textContent = `LisDao agent · step ${n} · ${label}`; bn.appendChild(tx); }"""
+  el.scrollIntoView({ block: 'center', inline: 'nearest' }); }"""
 # Cursor overlay (init script, so it is re-injected on every navigation; last position kept in sessionStorage).
 CURSOR_INIT_JS = """(() => { const add = () => { if (document.getElementById('lis-cursor') || !document.body) return;
   const s = document.createElement('style'); s.textContent = '#lis-cursor{position:fixed;left:0;top:0;width:26px;height:34px;pointer-events:none;z-index:2147483647;' +
-    'transition:transform 700ms cubic-bezier(.45,.05,.25,1);filter:drop-shadow(0 0 6px rgba(232,101,10,.9)) drop-shadow(0 2px 3px rgba(0,0,0,.35))}' +
-    '@keyframes lisripple{0%{transform:translate(-50%,-50%) scale(.2);opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}' +
-    '.lis-ripple{position:fixed;width:44px;height:44px;border-radius:50%;border:3px solid #E8650A;background:rgba(232,101,10,.25);pointer-events:none;z-index:2147483647;animation:lisripple 550ms ease-out forwards}';
+    'transition:transform 700ms cubic-bezier(.45,.05,.25,1);filter:drop-shadow(0 1px 2px rgba(0,0,0,.4))}';
   document.head.appendChild(s);
   const c = document.createElement('div'); c.id = 'lis-cursor';
-  c.innerHTML = '<svg width="26" height="34" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17.5 29.5 L13 19.5 L22 19.5 Z" fill="#E8650A" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>' +
-    '<span style="position:absolute;left:22px;top:26px;background:#E8650A;color:#fff;font:700 12px/1 system-ui,-apple-system,Segoe UI,sans-serif;padding:4px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 0 10px rgba(232,101,10,.7)">LisDao AI</span>';
+  c.innerHTML = '<svg width="26" height="34" viewBox="0 0 26 34"><path d="M2 2 L2 27 L8.5 21 L13 31.5 L17.5 29.5 L13 19.5 L22 19.5 Z" fill="#111" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>';
   const p = JSON.parse(sessionStorage.getItem('lis-cursor') || 'null') || [innerWidth / 2, innerHeight / 2];
   c.style.transition = 'none'; c.style.transform = `translate(${p[0]}px,${p[1]}px)`; document.body.appendChild(c);
   requestAnimationFrame(() => requestAnimationFrame(() => { c.style.transition = ''; })); };
@@ -155,9 +137,9 @@ def glide_to(page, id_):
     except Exception: return None
 
 def real_click_move(page, xy):
-    """Move the real mouse there (25 steps) and show a ripple, right before the click."""
+    """Move the real mouse there (25 steps) right before the click. No ripple or labels."""
     if not (CURSOR_OVERLAY and xy): return
-    try: page.mouse.move(xy[0], xy[1], steps=25); page.evaluate(CURSOR_RIPPLE_JS, xy); page.wait_for_timeout(150)
+    try: page.mouse.move(xy[0], xy[1], steps=25); page.wait_for_timeout(150)
     except Exception: pass
 
 CLEAR_HL_JS = "() => document.querySelectorAll('.lis-hl').forEach(e => e.remove())"
@@ -167,7 +149,7 @@ def short_label(s, n=40):
     return s if len(s) <= n else s[:n - 1] + "…"
 
 def describe(a, label):
-    """Short human label for the overlay and feed, e.g. 'Click “Next Step”' or 'Clear amount and type 0.1'."""
+    """Short human label for the step log / feed, e.g. 'Click “Next Step”' or 'Clear amount and type 0.1'."""
     L = short_label(label)
     return {"click": f"Click “{L}”", "type": f"Clear “{L}” and type {short_label(a.get('value'), 20)}",
             "select": f"Select {short_label(a.get('value'), 20)} in “{L}”", "extract": "Read one-time deposit address"}[a["action"]]
@@ -286,7 +268,7 @@ def run_task(dao, prop, ex=False):
             if page.locator(sel).count() == 0: history.append({"error": f"element {a.get('id')} not found"}); continue
             label = next((e["label"] for e in els if e["id"] == a["id"]), "")
             desc = describe(a, label); n = len(history) + 1
-            xy = glide_to(page, a["id"]) if a["action"] != "extract" else None
+            xy = glide_to(page, a["id"])
             page.evaluate(HIGHLIGHT_JS, [a["id"], n, MAX_STEPS, desc]); page.wait_for_timeout(STEP_PAUSE)
             hl = shot(page)
             if SHOT_DIR: os.makedirs(SHOT_DIR, exist_ok=True); page.screenshot(path=os.path.join(SHOT_DIR, f"step-{n:02d}.png"))
