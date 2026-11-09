@@ -6,7 +6,7 @@ import { loadSputnik, isSputnik, viewAt, rpcCall, DEMO_SPUTNIK, EXECUTOR, FACTOR
 import { autoTier, policyCheck, nearStr } from "../lib/policy";
 
 const CONTRACT = process.env.NEXT_PUBLIC_CONTRACT_ID || "lisdao-v2-1793741346.testnet";
-const AGENT = process.env.NEXT_PUBLIC_AGENT_ID || "lisdao-agent-1793741346.testnet";
+const AGENT = process.env.NEXT_PUBLIC_AGENT_ID || "lisdao-agent-1794181088.testnet";
 async function view(method, args = {}) { return viewAt(CONTRACT, method, args); }
 const withTimeout = (pr, ms, msg) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 // Ask the RPC for the final outcome of a tx; throws with the on-chain error if any action or receipt failed.

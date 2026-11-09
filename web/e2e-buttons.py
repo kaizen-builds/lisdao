@@ -1,6 +1,6 @@
 import sys, json, base64
 from playwright.sync_api import sync_playwright
-B=sys.argv[1]; res=[]; D="lisdao-demo.sputnikv2.testnet"; X="exec.lisdao-v2-1793741346.testnet"
+B=sys.argv[1]; res=[]; D="lisdao-demo.sputnikv2.testnet"; X="lisdao-exec-1794181088.testnet"
 def ok(name, cond, note=""): res.append((name, "PASS" if cond else "FAIL", note)); print(("PASS " if cond else "FAIL ")+name, note, flush=True)
 with sync_playwright() as p:
     b=p.chromium.launch(); errs=[]

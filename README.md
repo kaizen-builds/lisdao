@@ -16,7 +16,7 @@ Many real-world payees only accept crypto through a web page: a donation form th
 
 <a id="try"></a>
 ## Try it (do X, see Y)
-Live app: **https://lisdao.vercel.app** · demo DAO: **`lisdao-demo.sputnikv2.testnet`** · executor: **`exec.lisdao-v2-1793741346.testnet`**
+Live app: **https://lisdao.vercel.app** · demo DAO: **`lisdao-demo.sputnikv2.testnet`** · executor: **`lisdao-exec-1794181088.testnet`** · agent: **`lisdao-agent-1794181088.testnet`**
 
 | Do | See |
 |---|---|
@@ -34,7 +34,7 @@ Live app: **https://lisdao.vercel.app** · demo DAO: **`lisdao-demo.sputnikv2.te
 ```mermaid
 flowchart LR
   U[Member wallet<br/>Meteor via wallet-selector] -- add_proposal / act_proposal --> D[Sputnik DAO<br/>lisdao-demo.sputnikv2.testnet]
-  D -- vote passes: FunctionCall dispatch_task + escrow = max_spend --> E[LisDao executor<br/>exec.lisdao-v2-1793741346.testnet]
+  D -- vote passes: FunctionCall dispatch_task + escrow = max_spend --> E[LisDao executor<br/>lisdao-exec-1794181088.testnet]
   A[Agent<br/>browser_agent.py] -- polls pending_tasks --> E
   A -- Playwright + vision LLM (NEAR AI Cloud) + OCR check --> C[Demo charity page<br/>one-time NEAR address]
   A -- report_payout / report_result --> E
@@ -66,10 +66,13 @@ flowchart LR
 
 <a id="proof"></a>
 ## On-chain proof (NEAR testnet)
+Earlier payouts through proposal #11 were recorded on the previous executor `exec.lisdao-v2-1793741346.testnet` before the live agent and executor accounts were restarted. Those transactions remain valid on-chain proofs of the same contract logic.
+
 | What | Transaction |
 |---|---|
 | DAO | [lisdao-demo.sputnikv2.testnet](https://testnet.nearblocks.io/address/lisdao-demo.sputnikv2.testnet) |
-| Executor | [exec.lisdao-v2-1793741346.testnet](https://testnet.nearblocks.io/address/exec.lisdao-v2-1793741346.testnet) |
+| Executor (live) | [lisdao-exec-1794181088.testnet](https://testnet.nearblocks.io/address/lisdao-exec-1794181088.testnet) |
+| Agent (live) | [lisdao-agent-1794181088.testnet](https://testnet.nearblocks.io/address/lisdao-agent-1794181088.testnet) |
 | Proposal #5 created | [2RFPFNEW…](https://testnet.nearblocks.io/txns/2RFPFNEWBn9J7Lya8tLfdxGTWcG9SjYbMNwyiBBHtWJF) |
 | Proposal #5 approved by council (VoteApprove → dispatches task 4; payout tx not recorded) | [C4gPFrU9…](https://testnet.nearblocks.io/txns/C4gPFrU9xjECcydmC61TY4vN99Y6dqKxdKN9omMniPL6) |
 | Proposal #6 created | [2h7V8Jk5…](https://testnet.nearblocks.io/txns/2h7V8Jk51PhX9Br7Z14iM6zekUEAmE5opCrE3M8HZLeK) |
