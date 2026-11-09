@@ -7,7 +7,7 @@ def flag(env):
     return subprocess.run([sys.executable, "-c", code], cwd=HERE, env=e, capture_output=True, text=True).stdout.strip().splitlines()[-1]
 
 class CursorOverlayFlag(unittest.TestCase):
-    def test_default_off(self): self.assertEqual(flag({}), "False")
+    def test_default_on(self): self.assertEqual(flag({}), "True")
     def test_on_when_recording(self): self.assertEqual(flag({"RECORD": "1"}), "True")
     def test_on_when_headed(self): self.assertEqual(flag({"HEADLESS": "0"}), "True")
     def test_explicit_off(self): self.assertEqual(flag({"RECORD": "1", "CURSOR_OVERLAY": "0"}), "False")
